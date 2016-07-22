@@ -17,9 +17,11 @@ make_box_plot <- function(df, x, y, title, xlab, ylab, cohort = NULL, ...) {
     ggplot2::geom_boxplot(outlier.shape = NA) +
     ggplot2::ggtitle(title) + 
     ggplot2::xlab(xlab) + 
-    ggplot2::ylab(ylab)
+    ggplot2::ylab(ylab) +
+    ggplot2::stat_summary(aes(label = round(..y.., 2)), fun.y = median, geom = "text", size = 4, vjust = -0.5)
   if (!is.null(cohort)) {
-    boxplot = boxplot + ggplot2::aes(fill = df[, cohort])
+    boxplot = boxplot + ggplot2::aes(fill = df[, cohort]) +
+      ggplot2::scale_fill_discrete(name = cohort)
   }
   return (boxplot)
 }

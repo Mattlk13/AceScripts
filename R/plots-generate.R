@@ -38,6 +38,7 @@ generate_plots_and_stats <- function (df, x, stat_type, cohort = NULL) {
 
 #' @keywords internal
 
+
 remove_outliers <- function(x, column, ...) {
   lower_range = boxplot.stats(x[,column])$stats[1]
   upper_range = boxplot.stats(x[,column])$stats[5]

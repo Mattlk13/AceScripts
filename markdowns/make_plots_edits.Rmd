@@ -190,9 +190,9 @@ for (module in ace_by_task) {
   is.na(module_demographs) = sapply(module_demographs, is.infinite)
   
   for (ace_y in valid_ace_ys) {
-      generate_plots_and_stats(module_demographs, AGE, ace_y)
-      generate_plots_and_stats(module_demographs, GENDER, ace_y)
-      generate_plots_and_stats(module_demographs, AGE, ace_y, cohort = GENDER)
+      AceScripts::generate_plots_and_stats(module_demographs, AGE, ace_y)
+      AceScripts::generate_plots_and_stats(module_demographs, GENDER, ace_y)
+      AceScripts::generate_plots_and_stats(module_demographs, AGE, ace_y, cohort = GENDER)
   }
 
 }
