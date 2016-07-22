@@ -8,14 +8,6 @@
 #' @param stat_type the statistic we're interested in
 #' @param cohort cohort to break out boxplots by
 
-remove_outliers <- function(x, column, ...) {
-  lower_range = boxplot.stats(x[,column])$stats[1]
-  upper_range = boxplot.stats(x[,column])$stats[5]
-  valid_rows = which(x[,column] >= lower_range & x[,column] <= upper_range)
-
-  return (x[valid_rows,])
-}
-
 generate_plots_and_stats <- function (df, x, stat_type, cohort = NULL) {
   ace_formula_str = paste0(ace_y, " ~ ", x)
   ace_formula = formula(ace_formula_str)
@@ -42,6 +34,16 @@ generate_plots_and_stats <- function (df, x, stat_type, cohort = NULL) {
     iace_formula = formula(iace_formula_str)
     print_summaries(remove_outliers(df, stat_type), iace_formula, iace_formula_str)
   }
+}
+
+#' @keywords internal
+
+remove_outliers <- function(x, column, ...) {
+  lower_range = boxplot.stats(x[,column])$stats[1]
+  upper_range = boxplot.stats(x[,column])$stats[5]
+  valid_rows = which(x[,column] >= lower_range & x[,column] <= upper_range)
+  
+  return (x[valid_rows,])
 }
 
 #' @keywords internal
