@@ -16,3 +16,7 @@ install.packages("devtools")
 devtools::install_github("josegallegos07/aceR")
 ```
 
+Running:
+
+* Whenever you make a change within the `R` folder, make sure you run `Build and Reload` under the `Build` menu before running code
+* There is a `test_script.R` in the `scripts` folder, this is expecting to run on Seacrest data that sits on the Desktop. TODO: Add in some example/dummy data within the project so anyone can have a sanity check run without having to need a particular data set in some particular folder on their computer
