@@ -1,7 +1,8 @@
 ## ----df_from_proc_demo---------------------------------------------------
 # should I expect the cached nice data frame list to be called proc_demo? I guess so
-paste0("#", this_task_long) %>%
-  asis_output()
+if(this_task == "BRT" & !BRT_PRINT) {} else { # edge case where BRT needs to be evaluated even if no print (and thus header turned off)
+  paste0("#", this_task_long) %>%
+    asis_output()}
 cat("\n") %>% asis_output() # need this for line breaking
 
 d_raw <- proc_demo[[this_task]]
@@ -101,14 +102,48 @@ try(
     with(
       grubbs.test(get(vars_of_interest[3]), two.sided = TRUE)), TRUE)
 
-## ----rm_outliers_and_preproc---------------------------------------------
-d <- d_raw # %>%
+## ----rm_outliers---------------------------------------------
+# the approach is taken here to remove a subject from ALL metrics of a module
+# if they are an outlier in ANY metrics of that module, to improve interpretation b/w metrics
+# in any given module.
+# any outliers removed in the BRT data will be excluded from ALL metrics for ALL modules.
+
+bad_subs3 = NULL
+bad_subs5 = NULL
+bad_subs7 = NULL
+for (i in 1:length(vars_of_interest)) {# for each grade, concatenates outliers ACROSS metrics of interest
+  bad_subs3 <- bad_subs3 %>%
+    c(
+      d_raw %>%
+        filter(grade == "3rd Grade") %>%
+        with(
+          get_outlier_subs(get(vars_of_interest[1]), pid)))
   
+  bad_subs5 <- bad_subs5 %>%
+    c(
+      d_raw %>%
+        filter(grade == "5th Grade") %>%
+        with(
+          get_outlier_subs(get(vars_of_interest[1]), pid)))
+  
+  bad_subs7 <- bad_subs7 %>%
+    c(
+      d_raw %>%
+        filter(grade == "7th Grade") %>%
+        with(
+          get_outlier_subs(get(vars_of_interest[1]), pid)))
+}
+bad_subs_all = c(bad_subs3, bad_subs5, bad_subs7)
+
+d <- d_raw %>%
+  filter(!(pid %in% bad_subs_all))
+## ----preproc-------------------------------------------------------------
+if(this_task == "SPATIALSPAN") {d <- d_raw} # dumb edge case, can't run rm_outliers on span so must init d here
 if(this_task == "BRT") { # edge case, don't append BRT to itself
-  d <- d_raw %>%
+  d <- d %>%
     clean_grade_gender()
 } else {
-  d <- d_raw %>%
+  d <- d %>%
     brt_append() %>%
     clean_grade_gender()}
 
@@ -120,7 +155,8 @@ paste("###", vars_of_interest_long[1], sep = "") %>%
 d %>%
   ggplot(aes(x = get(vars_of_interest[1]), fill = factor(grade))) +
   geom_histogram(bins=20, position="dodge") +
-  labs(x = vars_of_interest_long[1])
+  labs(x = vars_of_interest_long[1]) +
+  guides(fill = guide_legend(title = "Grade"))
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -130,7 +166,8 @@ if(!invalid(vars_of_interest[2])) {
   d %>%
     ggplot(aes(x = get(vars_of_interest[2]), fill = factor(grade))) +
     geom_histogram(bins=20, position="dodge") +
-    labs(x = vars_of_interest_long[2])}
+    labs(x = vars_of_interest_long[2]) +
+    guides(fill = guide_legend(title = "Grade"))}
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[3])) {
@@ -140,7 +177,8 @@ if(!invalid(vars_of_interest[3])) {
   d %>%
     ggplot(aes(x = get(vars_of_interest[3]), fill = factor(grade))) +
     geom_histogram(bins=20, position="dodge") +
-    labs(x = vars_of_interest_long[3])}
+    labs(x = vars_of_interest_long[3]) +
+    guides(fill = guide_legend(title = "Grade"))}
 
 ## ----lms_brt_only----------------------------------------------------------
 # edge case here where BRT can't be regressed against itself
