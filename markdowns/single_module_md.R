@@ -179,6 +179,42 @@ if(!invalid(vars_of_interest[3])) {
     geom_histogram(bins=20, position="dodge") +
     labs(x = vars_of_interest_long[3]) +
     guides(fill = guide_legend(title = "Grade"))}
+## ----score_feedback_means--------------------------------------------------
+asis_output("##mean scores for giving feedback in task")
+cat("\n") %>% asis_output()
+
+
+#mutate_score = lazyeval::interp(~ ((((b-a)/a)*100)+100), a = as.name(score_vars[1]), b = as.name(score_vars[2]))
+#mtcars %>% mutate_(.dots = setNames(list(mutate_call), new_col_name))
+
+if(is.na(score_formula)) {
+  d_score = d %>%
+    group_by(grade) %>%
+    select(one_of(score_vars))
+  
+  if(length(score_vars) == 1) {
+    d_score = d_score %>%
+      summarize_(var1_mean = interp(~mean(a), a = as.name(score_vars[1])),
+                var1_sd = interp(~sd(a), a = as.name(score_vars[1])))
+  } else if(length(score_vars) == 2) {
+    d_score = d_score %>%
+      summarize_(var1_mean = interp(~mean(a), a = as.name(score_vars[1])),
+                var1_sd = interp(~sd(a), a = as.name(score_vars[1])),
+                var2_mean = interp(~mean(a), a = as.name(score_vars[2])),
+                var2_sd = interp(~sd(a), a = as.name(score_vars[2])))
+  }
+  print(score_vars)
+  
+} else if(score_formula == "fraction") {
+  d_score = d %>%
+    mutate_(score = interp(~((((b-a)/a)*100)+100), a = as.name(score_vars[1]), b = as.name(score_vars[2]))) %>%
+    group_by(grade) %>%
+    select(score) %>%
+    summarize(score_mean = mean(score),
+              score_sd = sd(score))
+}
+
+print(d_score)
 
 ## ----lms_brt_only----------------------------------------------------------
 # edge case here where BRT can't be regressed against itself
