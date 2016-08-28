@@ -1,0 +1,376 @@
+---
+title: "ACE results, new"
+author: "Monica Thieu"
+date: "August 12, 2016"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(plyr)
+library(dplyr)
+library(lazyeval)
+library(outliers)
+library(gtools)
+
+
+source("../R/brt_append.R") # loading in helper functions
+source("../R/clean_grade_gender.R")
+source("../R/get_outlier_subs.R")
+# note to self: now I am extremely concerned about multiple comparisons... I'll do an FDR using n = n_modules * n_varspermodule at some point?
+# note: does NOT support flexibility in grade labels (expects 3rd/5th/7th grade); this will be fixed later to expect grades based on what is in the cached dataframe
+```
+
+```{r defining printing args READ ME}
+# Please set each of these to TRUE or FALSE depending on whether you would like info on the module printed to the summary document.
+BRT_PRINT = TRUE
+BOX_PRINT = TRUE
+FLANK_PRINT = TRUE
+SAAT_PRINT = TRUE
+SPAN_PRINT = TRUE
+STROOP_PRINT = TRUE
+SWITCH_PRINT = TRUE
+TNT_PRINT = TRUE
+
+# Please set these to TRUE or FALSE depending on whether you would like outlier checking info or quality control histograms printed for ALL modules or not. Even if these are set to TRUE, they will not print for modules which have been turned off (set as FALSE) in the above block.
+OUTLIER_PRINT = TRUE
+QC_HIST_PRINT = TRUE
+
+# Please set this to TRUE or FALSE depending on whether you would like ALL continuous x-regressors z-scored. They will always be mean-centered; this just z-scores them by further dividing them by std dev.
+Z_SCORE_XREGS = FALSE
+```
+
+
+```{r loading cached -by hand- data}
+load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
+```
+
+```{r read_chunking, cache=FALSE}
+read_chunk("../markdowns/single_module_md.R")
+```
+
+```{r setting vars for BRT READ ME}
+this_task = "BRT"
+this_task_long = "BRT"
+vars_of_interest = c("rt_mean.right", "rt_mean.left")
+vars_of_interest_long = c("Mean RT--right hand", "Mean RT--left hand") # nice version for printing in graphs
+score_vars = c("rt_mean.overall")
+score_formula = NA
+```
+
+```{r ref.label="df_from_proc_demo"}
+```
+
+```{r ref.label="outlier_3rd_grade", eval=BRT_PRINT}
+```
+
+```{r ref.label="outlier_5th_grade", eval=BRT_PRINT}
+# when testing MEDIAN RT:
+# b016 is high side (slow RT) outlier by Grubbs' two sided test (p = .020)
+# no other outliers when b016 excluded
+# when testing MEAN RT:
+# no outliers found at this threshold (b016 is trending here though)
+```
+
+```{r ref.label="outlier_7th_grade", eval=BRT_PRINT}
+```
+
+```{r ref.label="rm_outliers"}
+```
+
+```{r ref.label="preproc"}
+# always run this irrespective of BRT_PRINT
+```
+
+```{r caching brt for appending to subsequent modules}
+brt <- d
+```
+
+```{r ref.label="score_feedback_means", eval=BRT_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(BRT_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms_brt_only", eval=BRT_PRINT}
+```
+
+```{r ref.label="graphs", eval=BRT_PRINT}
+```
+
+```{r setting vars for boxed READ ME}
+this_task = "BOXED"
+this_task_long = "Boxed"
+vars_of_interest = "rt_mean.overall"
+vars_of_interest_long = "Mean overall RT" # nice version for printing in graphs
+score_vars = c("rt_mean.conjunction_4", "rt_mean.conjunction_12")
+score_formula = "fraction"
+```
+
+```{r ref.label="df_from_proc_demo", eval=BOX_PRINT}
+```
+
+```{r ref.label="outlier_3rd_grade", eval=BOX_PRINT}
+```
+
+```{r ref.label="outlier_5th_grade", eval=BOX_PRINT}
+```
+
+```{r ref.label="outlier_7th_grade", eval=BOX_PRINT}
+```
+
+```{r ref.label="rm_outliers", eval=BOX_PRINT}
+```
+
+```{r ref.label="preproc", eval=BOX_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=BOX_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(BOX_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=BOX_PRINT}
+```
+
+```{r ref.label="graphs", eval=BOX_PRINT}
+```
+
+```{r setting vars for flanker READ ME}
+this_task = "FLANKER"
+this_task_long = "Flanker"
+vars_of_interest = c("rt_mean.congruent","rt_mean.incongruent","rt_mean.cost")
+vars_of_interest_long = c("Mean RT--congruent trials", "Mean RT--incongruent trials", "Mean cost of incongruence on RT") # nice version for printing in graphs
+score_vars = c("rt_mean.congruent", "rt_mean.incongruent")
+score_formula = "fraction"
+```
+
+```{r ref.label="df_from_proc_demo", eval=FLANK_PRINT}
+```
+
+```{r ref.label="outlier_3rd_grade", eval=FLANK_PRINT}
+```
+
+```{r ref.label="outlier_5th_grade", eval=FLANK_PRINT}
+```
+
+```{r ref.label="outlier_7th_grade", eval=FLANK_PRINT}
+```
+
+```{r ref.label="rm_outliers", eval=FLANK_PRINT}
+```
+
+```{r ref.label="preproc", eval=FLANK_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=FLANK_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(FLANK_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=FLANK_PRINT}
+```
+
+```{r ref.label="graphs", eval=FLANK_PRINT}
+```
+
+```{r setting vars for saat READ ME}
+this_task = "SAAT"
+this_task_long = "SAAT"
+vars_of_interest = c("rt_mean.sustained","rt_mean.impulsive")
+vars_of_interest_long = c("Mean RT--sustained trials", "Mean RT--impulsive trials") # nice version for printing in graphs
+score_vars = vars_of_interest
+score_formula = NA
+```
+
+```{r ref.label="df_from_proc_demo", eval=SAAT_PRINT}
+```
+
+```{r ref.label="outlier_3rd_grade", eval=SAAT_PRINT}
+```
+
+```{r ref.label="outlier_5th_grade", eval=SAAT_PRINT}
+```
+
+```{r ref.label="outlier_7th_grade", eval=SAAT_PRINT}
+```
+
+```{r ref.label="rm_outliers", eval=SAAT_PRINT}
+```
+
+```{r ref.label="preproc", eval=SAAT_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=SAAT_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(SAAT_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=SAAT_PRINT}
+```
+
+```{r ref.label="graphs", eval=SAAT_PRINT}
+```
+
+```{r setting vars for span READ ME}
+this_task = "SPATIALSPAN"
+this_task_long = "Spatial span"
+vars_of_interest = "object_count_span.overall"
+vars_of_interest_long = "Overall span (obj count)" # nice version for printing in graphs
+# NOT running the outlier check on the object span metric... I think I broke grubbs.test
+score_vars = vars_of_interest
+score_formula = NA
+```
+
+```{r ref.label="df_from_proc_demo", eval=SPAN_PRINT}
+```
+
+```{r ref.label="outlier_3rd_grade", eval=SPAN_PRINT}
+```
+
+```{r ref.label="outlier_5th_grade", eval=SPAN_PRINT}
+```
+
+```{r ref.label="outlier_7th_grade", eval=SPAN_PRINT}
+```
+
+```{r ref.label="preproc", eval=SPAN_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=SPAN_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(SPAN_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=SPAN_PRINT}
+```
+
+```{r ref.label="graphs", eval=SPAN_PRINT}
+```
+
+```{r setting vars for stroop READ ME}
+this_task = "STROOP"
+this_task_long = "Stroop task"
+vars_of_interest = c("rt_mean.congruent","rt_mean.incongruent","rt_mean.cost")
+vars_of_interest_long = c("Mean RT--congruent trials", "Mean RT--incongruent trials", "Mean cost of incongruence on RT") # nice version for printing in graphs
+score_vars = c("rt_mean.congruent", "rt_mean.incongruent")
+score_formula = "fraction"
+```
+
+```{r ref.label="df_from_proc_demo", eval=STROOP_PRINT}
+```
+
+```{r ref.label="outlier_3rd_grade", eval=STROOP_PRINT}
+```
+
+```{r ref.label="outlier_5th_grade", eval=STROOP_PRINT}
+```
+
+```{r ref.label="outlier_7th_grade", eval=STROOP_PRINT}
+```
+
+```{r ref.label="rm_outliers", eval=STROOP_PRINT}
+```
+
+```{r ref.label="preproc", eval=STROOP_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=STROOP_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(STROOP_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=STROOP_PRINT}
+```
+
+```{r ref.label="graphs", eval=STROOP_PRINT}
+```
+
+```{r setting vars for task switch READ ME}
+this_task = "TASKSWITCH"
+this_task_long = "Task switch"
+vars_of_interest = c("rt_mean.stay","rt_mean.switch")
+vars_of_interest_long = c("Mean RT--stay trials", "Mean RT--switch trials") # nice version for printing in graphs
+score_vars = vars_of_interest 
+score_formula = NA
+```
+
+```{r ref.label="df_from_proc_demo", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="outlier_3rd_grade", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="outlier_5th_grade", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="outlier_7th_grade", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="rm_outliers", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="preproc", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(SWITCH_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="graphs", eval=SWITCH_PRINT}
+```
+
+```{r setting vars for tap n trace READ ME}
+this_task = "TNT"
+this_task_long = "Tap and trace"
+vars_of_interest = c("rt_mean.tap_only","rt_mean.tap_trace")
+vars_of_interest_long = c("Mean RT--tap only trials", "Mean RT--tap and trace trials") # nice version for printing in graphs
+score_vars = vars_of_interest
+score_formula = NA
+```
+
+```{r ref.label="df_from_proc_demo", eval=TNT_PRINT}
+```
+
+```{r ref.label="outlier_3rd_grade", eval=TNT_PRINT}
+```
+
+```{r ref.label="outlier_5th_grade", eval=TNT_PRINT}
+```
+
+```{r ref.label="outlier_7th_grade", eval=TNT_PRINT}
+```
+
+```{r ref.label="rm_outliers", eval=TNT_PRINT}
+```
+
+```{r ref.label="preproc", eval=TNT_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=TNT_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(TNT_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=TNT_PRINT}
+```
+
+```{r ref.label="graphs", eval=TNT_PRINT}
+```

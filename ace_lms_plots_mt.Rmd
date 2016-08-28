@@ -1,0 +1,457 @@
+---
+title: "ace_lms_plots_mt"
+author: "Monica Thieu"
+date: "August 12, 2016"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+
+```{r setup, include=FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(plyr)
+library(dplyr)
+library(outliers)
+
+source("R/brt_append.R") # loading in helper functions
+source("R/clean_grade_gender.R")
+# note to self: now I am extremely concerned about multiple comparisons... I'll do an FDR using n = n_modules * n_varspermodule
+```
+
+```{r defining printing args READ ME}
+# Please set each of these to TRUE or FALSE depending on whether you would like info on the module printed to the summary document.
+BRT_PRINT = TRUE
+BOX_PRINT = TRUE
+FLANK_PRINT = TRUE
+SAAT_PRINT = TRUE
+SPAN_PRINT = TRUE
+STROOP_PRINT = TRUE
+SWITCH_PRINT = TRUE
+TNT_PRINT = TRUE
+
+# Please set these to TRUE or FALSE depending on whether you would like outlier checking info or quality control histograms printed for ALL modules or not. Even if these are set to TRUE, they will not print for modules which have been turned off (set as FALSE) in the above block.
+OUTLIER_PRINT = TRUE
+QC_HIST_PRINT = TRUE
+
+# Please set this to TRUE or FALSE depending on whether you would like ALL continuous x-regressors z-scored. They will always be mean-centered; this just z-scores them by further dividing them by std dev.
+Z_SCORE_XREGS = FALSE
+```
+
+
+```{r loading cached -by hand- data}
+load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
+```
+
+```{r purling, eval=FALSE}
+purl("markdowns/single_module_md.Rmd")
+```
+
+```{r attempting read_chunk, cache=FALSE}
+read_chunk("markdowns/single_module_md.R")
+```
+
+```{r ref.label="global_var_definitions"}
+
+```
+
+
+```{r brt loading}
+asis_output("#BRT")
+
+brt_raw <- proc_demo$BRT
+```
+
+`r if(BRT_PRINT & OUTLIER_PRINT) "##outlier testing"`
+```{r, eval=(BRT_PRINT & OUTLIER_PRINT)}
+asis_output("###3rd grade") # setting header
+brt_raw %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_mean.right, two.sided = TRUE))
+
+brt_raw %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_mean.left, two.sided = TRUE))
+asis_output("No outliers detected for either hand.") # prints to markdown
+```
+
+```{r, eval=(BRT_PRINT & OUTLIER_PRINT)}
+asis_output("###5th grade")
+brt_raw %>%
+  filter(grade == "5th Grade") %>%
+  with(
+    grubbs.test(rt_mean.right, two.sided = TRUE))
+
+brt_raw %>%
+  filter(grade == "5th Grade") %>%
+  with(
+    grubbs.test(rt_mean.left, two.sided = TRUE))
+
+# when testing MEDIAN RT:
+# b016 is high side (slow RT) outlier by Grubbs' two sided test (p = .020)
+# no other outliers when b016 excluded
+# when testing MEAN RT:
+# no outliers found at this threshold (b016 is trending here though)
+asis_output("No outliers detected.")
+```
+
+```{r, eval=(BRT_PRINT & OUTLIER_PRINT)}
+asis_output("###7th grade")
+brt_raw %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_mean.right, two.sided = TRUE))
+
+brt_raw %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_mean.left, two.sided = TRUE))
+asis_output("No outliers detected.")
+```
+
+```{r brt cleaning outliers}
+brt <- brt_raw %>%
+#  filter(pid != "ADMIN-UCSF-b016") %>% not if we are using mean RT she's not an outlier
+  clean_grade_gender()
+```
+
+`r if(BRT_PRINT & QC_HIST_PRINT) '##quality control histograms'`
+```{r, eval = (BRT_PRINT & QC_HIST_PRINT)}
+asis_output("###mean right hand RT")
+brt %>%
+  ggplot(aes(x = rt_mean.right)) +
+  geom_histogram(bins=20)
+```
+
+
+```{r, eval = (BRT_PRINT & QC_HIST_PRINT)}
+asis_output("###mean left hand RT")
+brt %>%
+  ggplot(aes(x = rt_mean.left)) +
+  geom_histogram(bins=20)
+```
+
+`r if(BRT_PRINT) "##regressions"`
+```{r brt lms, eval=BRT_PRINT}
+asis_output("###right hand")
+brt %>%
+  with(summary(lm(rt_mean.right ~ grade_num * gender)))
+
+asis_output("###left hand")
+brt %>%
+  with(summary(lm(rt_mean.left ~ grade_num * gender)))
+```
+
+
+```{r box loading, eval=BOX_PRINT}
+asis_output("#Boxed")
+box_raw <- proc_demo$BOXED
+box <- box_raw %>%
+  brt_append() %>%
+  clean_grade_gender()
+```
+
+`r if(BOX_PRINT & OUTLIER_PRINT) "##outlier testing"`
+```{r boxed testing outliers 3rd grade, eval=(BOX_PRINT & OUTLIER_PRINT)}
+asis_output("###3rd grade")
+box %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_mean.overall, two.sided = TRUE))
+asis_output("No outliers detected.")
+```
+
+```{r, eval=(BOX_PRINT & OUTLIER_PRINT)}
+asis_output("###5th grade")
+box %>%
+  filter(grade == "5th Grade") %>%
+  with(
+    grubbs.test(rt_mean.overall, two.sided = TRUE))
+# b016 is a high side (slow) outlier on overall mean RT again!
+asis_output("b016 is high side outlier (too slow). No other outliers when b016 excluded.")
+```
+
+```{r, eval=(BOX_PRINT & OUTLIER_PRINT)}
+asis_output("###7th grade")
+box %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_mean.overall, two.sided = TRUE))
+asis_output("No outliers detected.")
+```
+
+`r if(BOX_PRINT) "##regressions"`
+```{r box lm, eval=BOX_PRINT}
+asis_output("###mean overall RT")
+box %>%
+  with(summary(lm(rt_mean.overall ~ grade_num * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
+```
+
+#Flanker
+```{r}
+flank_raw <- proc_demo$FLANKER
+flank <- flank_raw %>%
+  brt_append() %>%
+  clean_grade_gender()
+```
+
+##outlier testing
+```{r}
+flank %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+flank %>%
+  filter(grade == "5th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+flank %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+##regressions
+###median overall RT
+```{r}
+flank %>%
+  with(summary(lm(rt_median.overall ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+###median overall cost on RT
+```{r}
+# for this and subsequent modules, it seems that outlier testing should be done on RT, but cost should be used as the primary outcome var of interest when cost is available?
+flank %>%
+  with(summary(lm(rt_median.cost ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+#SAAT
+```{r}
+saat_raw <- proc_demo$SAAT
+saat <- saat_raw %>%
+  brt_append() %>%
+  clean_grade_gender()
+```
+
+##outlier testing
+```{r}
+saat %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+saat %>%
+  filter(grade == "5th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+saat %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+##regressions
+###median overall RT
+```{r}
+saat %>%
+  with(summary(lm(rt_median.overall ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+#Spatial span
+```{r}
+span_raw <- proc_demo$SPATIALSPAN
+span <- span_raw %>%
+  brt_append() %>%
+  clean_grade_gender()
+```
+
+##outlier testing
+```{r}
+span %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+span %>%
+  filter(grade == "5th Grade", !(pid %in% c("ADMIN-UCSF-b016", "ADMIN-UCSF-b023"))) %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+# b016 is an outlier here (RT too low aka too FAST) but since she is already excluded from BRT don't need to re-exclude her here
+# when b016 excluded, b023 is an outlier (RT too high, aka too SLOW)
+```
+
+```{r}
+span %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r spatial span cleaning outliers}
+span <- span %>%
+  filter(!(pid %in% c("ADMIN-UCSF-b016", "ADMIN-UCSF-b023")))
+```
+
+##regressions
+###median overall RT
+```{r}
+span %>%
+  with(summary(lm(rt_median.overall ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+###object count span
+```{r}
+# note here that we are NOT using RT as the outcome var! but we are using it for outlier testing
+span %>%
+  with(summary(lm(object_count_span.overall ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+
+#Stroop task
+```{r}
+stroop_raw <- proc_demo$STROOP
+stroop <- stroop_raw %>%
+  brt_append() %>%
+  clean_grade_gender()
+```
+
+##outlier testing
+```{r}
+stroop %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+stroop %>%
+  filter(grade == "5th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+stroop %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+##regressions
+###median overall RT
+```{r}
+stroop %>%
+  with(summary(lm(rt_median.overall ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+###median overall cost on RT
+```{r}
+stroop %>%
+  with(summary(lm(rt_median.cost ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+
+#Task switching
+```{r}
+switch_raw <- proc_demo$TASKSWITCH
+switch <- switch_raw %>%
+  brt_append() %>%
+  clean_grade_gender()
+```
+
+##outlier testing
+```{r}
+switch %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+switch %>%
+  filter(grade == "5th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+# again b016 is an outlier (rt too LONG), she is not doing so hot
+```
+
+```{r}
+switch %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+##regressions
+###median overall RT
+```{r}
+switch %>%
+  with(summary(lm(rt_median.overall ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+###median overall cost on RT
+```{r}
+switch %>%
+  with(summary(lm(rt_median.cost ~ grade_num * gender + scale(brt_rt_median.overall, scale = Z_SCORE_XREGS))))
+```
+
+#TNT
+```{r}
+tnt_raw <- proc_demo$TNT
+tnt <- tnt_raw %>%
+  brt_append() %>%
+  clean_grade_gender()
+```
+
+##outlier testing
+```{r}
+tnt %>%
+  filter(grade == "3rd Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+tnt %>%
+  filter(grade == "5th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+```{r}
+tnt %>%
+  filter(grade == "7th Grade") %>%
+  with(
+    grubbs.test(rt_median.overall, two.sided = TRUE))
+```
+
+##regressions
+###median overall RT
+```{r}
+tnt %>%
+  with(summary(lm(rt_mean.overall ~ grade_num * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
+```
+
+###median overall cost on RT
+```{r}
+tnt %>%
+  with(summary(lm(rt_median.cost ~ grade_num * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
+```
