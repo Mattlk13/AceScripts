@@ -194,14 +194,14 @@ if(is.na(score_formula)) {
   
   if(length(score_vars) == 1) {
     d_score = d_score %>%
-      summarize_(var1_mean = interp(~mean(a), a = as.name(score_vars[1])),
-                var1_sd = interp(~sd(a), a = as.name(score_vars[1])))
+      summarize_(var1_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[1])),
+                var1_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[1])))
   } else if(length(score_vars) == 2) {
     d_score = d_score %>%
-      summarize_(var1_mean = interp(~mean(a), a = as.name(score_vars[1])),
-                var1_sd = interp(~sd(a), a = as.name(score_vars[1])),
-                var2_mean = interp(~mean(a), a = as.name(score_vars[2])),
-                var2_sd = interp(~sd(a), a = as.name(score_vars[2])))
+      summarize_(var1_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[1])),
+                var1_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[1])),
+                var2_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[2])),
+                var2_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[2])))
   }
   print(score_vars)
   
