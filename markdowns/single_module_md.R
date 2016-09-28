@@ -7,138 +7,29 @@ cat("\n") %>% asis_output() # need this for line breaking
 
 d_raw <- proc_demo[[this_task]]
 
-## ----outlier_3rd_grade---------------------------------------------------
-asis_output("##outlier testing")
-cat("\n") %>% asis_output()
-asis_output("###3rd grade") # setting header
-cat("\n") %>% asis_output()
-paste("####", vars_of_interest_long[1], sep = "") %>%
-  asis_output()
-d_raw %>%
-  filter(grade == "3rd Grade") %>%
-  with(
-    grubbs.test(get(vars_of_interest[1]), two.sided = TRUE))
-
-# note that I am couching the printouts for multiple output vars in a try statement
-# so if there's only one var of interest, the other ones just won't print. easier than checking how many vars there are bc there's only gonna be 1 or 2, only 3 once (Flanker)
-# sometimes a try statement doesn't work so in those instances using an if(gtools::invalid()) check
-cat("\n") %>% asis_output()
-if(!invalid(vars_of_interest[2])) {
-  paste("####", vars_of_interest_long[2], sep = "") %>%
-    asis_output()}
-try(
-  d_raw %>%
-    filter(grade == "3rd Grade") %>%
-    with(
-      grubbs.test(get(vars_of_interest[2]), two.sided = TRUE)), TRUE)
-
-cat("\n") %>% asis_output()
-if(!invalid(vars_of_interest[3])) {
-  paste("####", vars_of_interest_long[3], sep = "") %>%
-    asis_output()}
-try(
-  d_raw %>%
-    filter(grade == "3rd Grade") %>%
-    with(
-      grubbs.test(get(vars_of_interest[3]), two.sided = TRUE)), TRUE)
-
-## ----outlier_5th_grade---------------------------------------------------
-asis_output("###5th grade")
-cat("\n") %>% asis_output()
-paste("####", vars_of_interest_long[1], sep = "") %>%
-  asis_output()
-d_raw %>%
-  filter(grade == "5th Grade") %>%
-  with(
-    grubbs.test(get(vars_of_interest[1]), two.sided = TRUE))
-
-cat("\n") %>% asis_output()
-if(!invalid(vars_of_interest[2])) {
-  paste("####", vars_of_interest_long[2], sep = "") %>%
-    asis_output()}
-try(
-  d_raw %>%
-    filter(grade == "5th Grade") %>%
-    with(
-      grubbs.test(get(vars_of_interest[2]), two.sided = TRUE)), TRUE)
-
-cat("\n") %>% asis_output()
-if(!invalid(vars_of_interest[3])) {
-  paste("####", vars_of_interest_long[3], sep = "") %>%
-    asis_output()}
-try(
-  d_raw %>%
-    filter(grade == "5th Grade") %>%
-    with(
-      grubbs.test(get(vars_of_interest[3]), two.sided = TRUE)), TRUE)
-
-## ----outlier_7th_grade---------------------------------------------------
-asis_output("###7th grade")
-cat("\n") %>% asis_output()
-paste("####", vars_of_interest_long[1], sep = "") %>%
-  asis_output()
-d_raw %>%
-  filter(grade == "7th Grade") %>%
-  with(
-    grubbs.test(get(vars_of_interest[1]), two.sided = TRUE))
-
-cat("\n") %>% asis_output()
-if(!invalid(vars_of_interest[2])) {
-  paste("####", vars_of_interest_long[2], sep = "") %>%
-    asis_output()}
-try(
-  d_raw %>%
-    filter(grade == "7th Grade") %>%
-    with(
-      grubbs.test(get(vars_of_interest[2]), two.sided = TRUE)), TRUE)
-
-cat("\n") %>% asis_output()
-if(!invalid(vars_of_interest[3])) {
-  paste("####", vars_of_interest_long[3], sep = "") %>%
-    asis_output()}
-try(
-  d_raw %>%
-    filter(grade == "7th Grade") %>%
-    with(
-      grubbs.test(get(vars_of_interest[3]), two.sided = TRUE)), TRUE)
-
 ## ----rm_outliers---------------------------------------------
 # the approach is taken here to remove a subject from ALL metrics of a module
 # if they are an outlier in ANY metrics of that module, to improve interpretation b/w metrics
 # in any given module.
 # any outliers removed in the BRT data will be excluded from ALL metrics for ALL modules.
 
-bad_subs3 = NULL
-bad_subs5 = NULL
-bad_subs7 = NULL
+bad_subs = vector("list", length(unique(d_raw$grade)))
 for (i in 1:length(vars_of_interest)) {# for each grade, concatenates outliers ACROSS metrics of interest
-  bad_subs3 <- bad_subs3 %>%
-    c(
-      d_raw %>%
-        filter(grade == "3rd Grade") %>%
+  for (j in 1:length(unique(d_raw$grade))) {
+    if(dim(filter(d_raw, grade == unique(d_raw$grade)[j]))[1] > 2) {
+      these_bad_subs = d_raw %>%
+        filter(grade == unique(d_raw$grade)[j]) %>%
         with(
-          get_outlier_subs(get(vars_of_interest[1]), pid)))
-  
-  bad_subs5 <- bad_subs5 %>%
-    c(
-      d_raw %>%
-        filter(grade == "5th Grade") %>%
-        with(
-          get_outlier_subs(get(vars_of_interest[1]), pid)))
-  
-  bad_subs7 <- bad_subs7 %>%
-    c(
-      d_raw %>%
-        filter(grade == "7th Grade") %>%
-        with(
-          get_outlier_subs(get(vars_of_interest[1]), pid)))
+          get_outlier_subs(get(vars_of_interest[i]), pid))
+    } else {these_bad_subs = NULL}
+    if(!is.null(these_bad_subs)) {bad_subs[[j]] <- c(bad_subs[[j]], these_bad_subs)}
+  }
 }
-bad_subs_all = c(bad_subs3, bad_subs5, bad_subs7)
 
 d <- d_raw %>%
-  filter(!(pid %in% bad_subs_all))
+  filter(!(pid %in% unlist(bad_subs)))
 ## ----preproc-------------------------------------------------------------
-if(this_task == "SPATIALSPAN") {d <- d_raw} # dumb edge case, can't run rm_outliers on span so must init d here
+if(this_task %in% c("SPATIALSPAN", "BACKWARDSSPATIALSPAN")) {d <- d_raw} # dumb edge case, can't run rm_outliers on span so must init d here
 if(this_task == "BRT") { # edge case, don't append BRT to itself
   d <- d %>%
     clean_grade_gender()
@@ -153,7 +44,7 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  ggplot(aes(x = get(vars_of_interest[1]), fill = factor(grade))) +
+  ggplot(aes(x = get(vars_of_interest[1]), fill = factor(grade_label))) +
   geom_histogram(bins=20, position="dodge") +
   labs(x = vars_of_interest_long[1]) +
   guides(fill = guide_legend(title = "Grade"))
@@ -164,7 +55,7 @@ if(!invalid(vars_of_interest[2])) {
     asis_output()}
 if(!invalid(vars_of_interest[2])) {
   d %>%
-    ggplot(aes(x = get(vars_of_interest[2]), fill = factor(grade))) +
+    ggplot(aes(x = get(vars_of_interest[2]), fill = factor(grade_label))) +
     geom_histogram(bins=20, position="dodge") +
     labs(x = vars_of_interest_long[2]) +
     guides(fill = guide_legend(title = "Grade"))}
@@ -175,7 +66,7 @@ if(!invalid(vars_of_interest[3])) {
     asis_output()}
 if(!invalid(vars_of_interest[3])) {
   d %>%
-    ggplot(aes(x = get(vars_of_interest[3]), fill = factor(grade))) +
+    ggplot(aes(x = get(vars_of_interest[3]), fill = factor(grade_label))) +
     geom_histogram(bins=20, position="dodge") +
     labs(x = vars_of_interest_long[3]) +
     guides(fill = guide_legend(title = "Grade"))}
@@ -183,7 +74,7 @@ if(!invalid(vars_of_interest[3])) {
 asis_output("##mean scores for giving feedback in task")
 cat("\n") %>% asis_output()
 
-
+#notetaking to be deleted
 #mutate_score = lazyeval::interp(~ ((((b-a)/a)*100)+100), a = as.name(score_vars[1]), b = as.name(score_vars[2]))
 #mtcars %>% mutate_(.dots = setNames(list(mutate_call), new_col_name))
 
@@ -195,13 +86,13 @@ if(is.na(score_formula)) {
   if(length(score_vars) == 1) {
     d_score = d_score %>%
       summarize_(var1_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[1])),
-                var1_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[1])))
+                 var1_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[1])))
   } else if(length(score_vars) == 2) {
     d_score = d_score %>%
       summarize_(var1_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[1])),
-                var1_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[1])),
-                var2_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[2])),
-                var2_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[2])))
+                 var1_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[1])),
+                 var2_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[2])),
+                 var2_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[2])))
   }
   print(score_vars)
   
@@ -223,7 +114,7 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[1]) ~ grade_num * gender)))
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -231,7 +122,7 @@ if(!invalid(vars_of_interest[2])) {
     asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
 if(!invalid(vars_of_interest[2])) {
   d %>%
-    with(summary(lm(get(vars_of_interest[2]) ~ grade_num * gender)))}
+    with(summary(lm(get(vars_of_interest[2]) ~ grade * gender)))}
 
 ## ----lms-----------------------------------------------------------------
 asis_output("##regressions")
@@ -239,7 +130,7 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[1]) ~ grade_num * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -247,7 +138,7 @@ if(!invalid(vars_of_interest[2])) {
     asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
 if(!invalid(vars_of_interest[2])) {
   d %>%
-    with(summary(lm(get(vars_of_interest[2]) ~ grade_num * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))}
+    with(summary(lm(get(vars_of_interest[2]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))}
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[3])) {
@@ -255,7 +146,32 @@ if(!invalid(vars_of_interest[3])) {
     asis_output()}
 if(!invalid(vars_of_interest[3])) {
   d %>%
-    with(summary(lm(get(vars_of_interest[3]) ~ grade_num * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))}
+    with(summary(lm(get(vars_of_interest[3]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))}
+
+## ----lms_filter_only-----------------------------------------------------
+# this one has to be special because we're also regressing by distractor number which doesn't apply for other modules
+asis_output("##regressions")
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d %>%
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender * distractors + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
+
+cat("\n") %>% asis_output()
+if(!invalid(vars_of_interest[2])) {
+  paste("###", vars_of_interest_long[2], sep = "") %>%
+    asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
+if(!invalid(vars_of_interest[2])) {
+  d %>%
+    with(summary(lm(get(vars_of_interest[2]) ~ grade * gender * distractors + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))}
+
+cat("\n") %>% asis_output()
+if(!invalid(vars_of_interest[3])) {
+  paste("###", vars_of_interest_long[3], sep = "") %>%
+    asis_output()}
+if(!invalid(vars_of_interest[3])) {
+  d %>%
+    with(summary(lm(get(vars_of_interest[3]) ~ grade * gender * distractors + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))}
 
 ## ----graphs--------------------------------------------------------------
 asis_output("##graphs")
@@ -263,7 +179,7 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  ggplot(aes(x = grade, y = get(vars_of_interest[1]), fill = factor(gender))) +
+  ggplot(aes(x = grade_label, y = get(vars_of_interest[1]), fill = factor(gender))) +
   geom_boxplot() +
   labs(y = vars_of_interest_long[1]) +
   guides(fill = guide_legend(title = "Gender"))
@@ -274,7 +190,7 @@ if(!invalid(vars_of_interest[2])) {
     asis_output()}
 if(!invalid(vars_of_interest[2])) {
   d %>%
-    ggplot(aes(x = grade, y = get(vars_of_interest[2]), fill = factor(gender))) +
+    ggplot(aes(x = grade_label, y = get(vars_of_interest[2]), fill = factor(gender))) +
     geom_boxplot() +
     labs(y = vars_of_interest_long[2]) +
     guides(fill = guide_legend(title = "Gender"))
@@ -286,8 +202,64 @@ if(!invalid(vars_of_interest[3])) {
     asis_output()}
 if(!invalid(vars_of_interest[3])) {
   d %>%
-    ggplot(aes(x = grade, y = get(vars_of_interest[3]), fill = factor(gender))) +
+    ggplot(aes(x = grade_label, y = get(vars_of_interest[3]), fill = factor(gender))) +
     geom_boxplot() +
     labs(y = vars_of_interest_long[3]) +
     guides(fill = guide_legend(title = "Gender"))
+}
+
+## ----graphs_filter_only--------------------------------------------------
+# again special because need to plot by distractor number
+asis_output("##graphs")
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+
+d_plot <- d %>%
+  group_by(grade_label, distractors) %>%
+  summarize(k.2.mean = mean(k.2, na.rm = T),
+            k.4.mean = mean(k.4, na.rm = T),
+            k.2.se = sd(k.2, na.rm = T)/sqrt(length(!is.na(k.2))),
+            k.4.se = sd(k.4, na.rm = T)/sqrt(!is.na(length(k.4))))
+
+d_plot %>%
+  ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[1], ".mean")), color = factor(grade_label))) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = get(paste0(vars_of_interest[1], ".mean")) - get(paste0(vars_of_interest[1], ".se")),
+                    ymax = get(paste0(vars_of_interest[1], ".mean")) + get(paste0(vars_of_interest[1], ".se")),
+                    width = 0.5)) +
+  labs(y = vars_of_interest_long[1]) +
+  guides(color = guide_legend(title = "Grade"))
+
+cat("\n") %>% asis_output()
+if(!invalid(vars_of_interest[2])) {
+  paste("###", vars_of_interest_long[2], sep = "") %>%
+    asis_output()}
+if(!invalid(vars_of_interest[2])) {
+  d_plot %>%
+    ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[2], ".mean")), color = factor(grade_label))) +
+    geom_point() +
+    geom_line() +
+    geom_errorbar(aes(ymin = get(paste0(vars_of_interest[2], ".mean")) - get(paste0(vars_of_interest[2], ".se")),
+                      ymax = get(paste0(vars_of_interest[2], ".mean")) + get(paste0(vars_of_interest[2], ".se")),
+                      width = 0.5)) +
+    labs(y = vars_of_interest_long[2]) +
+    guides(color = guide_legend(title = "Grade"))
+}
+
+cat("\n") %>% asis_output()
+if(!invalid(vars_of_interest[3])) {
+  paste("###", vars_of_interest_long[3], sep = "") %>%
+    asis_output()}
+if(!invalid(vars_of_interest[3])) {
+  d_plot %>%
+    ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[3], ".mean")), color = factor(grade_label))) +
+    geom_point() +
+    geom_line() +
+    geom_errorbar(aes(ymin = get(paste0(vars_of_interest[3], ".mean")) - get(paste0(vars_of_interest[3], ".se")),
+                      ymax = get(paste0(vars_of_interest[3], ".mean")) + get(paste0(vars_of_interest[3], ".se")),
+                      width = 0.5)) +
+    labs(y = vars_of_interest_long[3]) +
+    guides(color = guide_legend(title = "Grade"))
 }
