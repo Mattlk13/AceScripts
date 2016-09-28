@@ -29,14 +29,16 @@ source("../R/get_outlier_subs.R")
 
 ```{r defining printing args READ ME}
 # Please set each of these to TRUE or FALSE depending on whether you would like info on the module printed to the summary document.
-BRT_PRINT = TRUE
-BOX_PRINT = TRUE
-FLANK_PRINT = TRUE
-SAAT_PRINT = TRUE
-SPAN_PRINT = TRUE
-STROOP_PRINT = TRUE
-SWITCH_PRINT = TRUE
-TNT_PRINT = TRUE
+BRT_PRINT = T
+BOX_PRINT = T
+FLANK_PRINT = T
+SAAT_PRINT = T
+SPAN_PRINT = T
+BSPAN_PRINT = FALSE
+STROOP_PRINT = T
+SWITCH_PRINT = T
+TNT_PRINT = T
+FILTER_PRINT = T
 
 # Please set these to TRUE or FALSE depending on whether you would like outlier checking info or quality control histograms printed for ALL modules or not. Even if these are set to TRUE, they will not print for modules which have been turned off (set as FALSE) in the above block.
 OUTLIER_PRINT = TRUE
@@ -48,7 +50,8 @@ Z_SCORE_XREGS = FALSE
 
 
 ```{r loading cached -by hand- data}
-load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
+# load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
+load(file = "~/Dropbox/aceR/real_test_data_092716/preproc_data.RData")
 ```
 
 ```{r read_chunking, cache=FALSE}
@@ -67,21 +70,13 @@ score_formula = NA
 ```{r ref.label="df_from_proc_demo"}
 ```
 
-```{r ref.label="outlier_3rd_grade", eval=BRT_PRINT}
-```
-
-```{r ref.label="outlier_5th_grade", eval=BRT_PRINT}
+```{r ref.label="rm_outliers"}
+# notes from seacrest, to be noted elsewhere:
 # when testing MEDIAN RT:
-# b016 is high side (slow RT) outlier by Grubbs' two sided test (p = .020)
+# b016 (5th grade) is high side (slow RT) outlier by Grubbs' two sided test (p = .020)
 # no other outliers when b016 excluded
 # when testing MEAN RT:
 # no outliers found at this threshold (b016 is trending here though)
-```
-
-```{r ref.label="outlier_7th_grade", eval=BRT_PRINT}
-```
-
-```{r ref.label="rm_outliers"}
 ```
 
 ```{r ref.label="preproc"}
@@ -116,15 +111,6 @@ score_formula = "fraction"
 ```{r ref.label="df_from_proc_demo", eval=BOX_PRINT}
 ```
 
-```{r ref.label="outlier_3rd_grade", eval=BOX_PRINT}
-```
-
-```{r ref.label="outlier_5th_grade", eval=BOX_PRINT}
-```
-
-```{r ref.label="outlier_7th_grade", eval=BOX_PRINT}
-```
-
 ```{r ref.label="rm_outliers", eval=BOX_PRINT}
 ```
 
@@ -155,15 +141,6 @@ score_formula = "fraction"
 ```{r ref.label="df_from_proc_demo", eval=FLANK_PRINT}
 ```
 
-```{r ref.label="outlier_3rd_grade", eval=FLANK_PRINT}
-```
-
-```{r ref.label="outlier_5th_grade", eval=FLANK_PRINT}
-```
-
-```{r ref.label="outlier_7th_grade", eval=FLANK_PRINT}
-```
-
 ```{r ref.label="rm_outliers", eval=FLANK_PRINT}
 ```
 
@@ -192,15 +169,6 @@ score_formula = NA
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=SAAT_PRINT}
-```
-
-```{r ref.label="outlier_3rd_grade", eval=SAAT_PRINT}
-```
-
-```{r ref.label="outlier_5th_grade", eval=SAAT_PRINT}
-```
-
-```{r ref.label="outlier_7th_grade", eval=SAAT_PRINT}
 ```
 
 ```{r ref.label="rm_outliers", eval=SAAT_PRINT}
@@ -234,15 +202,6 @@ score_formula = NA
 ```{r ref.label="df_from_proc_demo", eval=SPAN_PRINT}
 ```
 
-```{r ref.label="outlier_3rd_grade", eval=SPAN_PRINT}
-```
-
-```{r ref.label="outlier_5th_grade", eval=SPAN_PRINT}
-```
-
-```{r ref.label="outlier_7th_grade", eval=SPAN_PRINT}
-```
-
 ```{r ref.label="preproc", eval=SPAN_PRINT}
 ```
 
@@ -258,6 +217,35 @@ score_formula = NA
 ```{r ref.label="graphs", eval=SPAN_PRINT}
 ```
 
+```{r setting vars for backward span READ ME}
+this_task = "BACKWARDSSPATIALSPAN"
+this_task_long = "Backward spatial span"
+vars_of_interest = "object_count_span.overall"
+vars_of_interest_long = "Overall span (obj count)" # nice version for printing in graphs
+# NOT running the outlier check on the object span metric... I think I broke grubbs.test
+score_vars = vars_of_interest
+score_formula = NA
+```
+
+```{r ref.label="df_from_proc_demo", eval=BSPAN_PRINT}
+```
+
+```{r ref.label="preproc", eval=BSPAN_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=BSPAN_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(BSPAN_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=BSPAN_PRINT}
+```
+
+```{r ref.label="graphs", eval=BSPAN_PRINT}
+```
+
+
 ```{r setting vars for stroop READ ME}
 this_task = "STROOP"
 this_task_long = "Stroop task"
@@ -268,15 +256,6 @@ score_formula = "fraction"
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=STROOP_PRINT}
-```
-
-```{r ref.label="outlier_3rd_grade", eval=STROOP_PRINT}
-```
-
-```{r ref.label="outlier_5th_grade", eval=STROOP_PRINT}
-```
-
-```{r ref.label="outlier_7th_grade", eval=STROOP_PRINT}
 ```
 
 ```{r ref.label="rm_outliers", eval=STROOP_PRINT}
@@ -309,15 +288,6 @@ score_formula = NA
 ```{r ref.label="df_from_proc_demo", eval=SWITCH_PRINT}
 ```
 
-```{r ref.label="outlier_3rd_grade", eval=SWITCH_PRINT}
-```
-
-```{r ref.label="outlier_5th_grade", eval=SWITCH_PRINT}
-```
-
-```{r ref.label="outlier_7th_grade", eval=SWITCH_PRINT}
-```
-
 ```{r ref.label="rm_outliers", eval=SWITCH_PRINT}
 ```
 
@@ -348,15 +318,6 @@ score_formula = NA
 ```{r ref.label="df_from_proc_demo", eval=TNT_PRINT}
 ```
 
-```{r ref.label="outlier_3rd_grade", eval=TNT_PRINT}
-```
-
-```{r ref.label="outlier_5th_grade", eval=TNT_PRINT}
-```
-
-```{r ref.label="outlier_7th_grade", eval=TNT_PRINT}
-```
-
 ```{r ref.label="rm_outliers", eval=TNT_PRINT}
 ```
 
@@ -373,4 +334,34 @@ score_formula = NA
 ```
 
 ```{r ref.label="graphs", eval=TNT_PRINT}
+```
+
+```{r setting vars for filter READ ME}
+this_task = "FILTER"
+this_task_long = "Vogel filtering"
+vars_of_interest = c("k.2", "k.4")
+vars_of_interest_long = c("k = 2 targets * (Hit - FA)", "k = 4 targets * (Hit - FA)") # nice version for printing in graphs
+score_vars = vars_of_interest
+score_formula = NA
+```
+
+```{r ref.label="df_from_proc_demo", eval=FILTER_PRINT}
+```
+
+```{r ref.label="rm_outliers", eval=FILTER_PRINT}
+```
+
+```{r ref.label="preproc", eval=FILTER_PRINT}
+```
+
+```{r ref.label="score_feedback_means", eval=FILTER_PRINT}
+```
+
+```{r ref.label="qc_graphs", eval=(FILTER_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms_filter_only", eval=FILTER_PRINT}
+```
+
+```{r ref.label="graphs_filter_only", eval=FILTER_PRINT}
 ```
