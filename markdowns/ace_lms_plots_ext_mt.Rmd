@@ -58,6 +58,12 @@ load(file = "~/Dropbox/aceR/real_test_data_092716/preproc_data.RData")
 read_chunk("../markdowns/single_module_md.R")
 ```
 
+```{r school prefixes}
+prefixes = c("br", "pe", "la", "mi", "se")
+schools = c("Bracher", "Peterson", "Laurelwood", "Millenium", "Seacrest")
+```
+
+
 ```{r setting vars for BRT READ ME}
 this_task = "BRT"
 this_task_long = "BRT"

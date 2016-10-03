@@ -7,6 +7,8 @@ cat("\n") %>% asis_output() # need this for line breaking
 
 d_raw <- proc_demo[[this_task]]
 
+d_raw <- d_raw[grep(paste0(prefixes, collapse = "|"), d_raw$pid),] # only including data from real Ss (with school-specific ID prefixes)
+
 ## ----rm_outliers---------------------------------------------
 # the approach is taken here to remove a subject from ALL metrics of a module
 # if they are an outlier in ANY metrics of that module, to improve interpretation b/w metrics
