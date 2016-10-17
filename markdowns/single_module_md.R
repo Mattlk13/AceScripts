@@ -12,13 +12,14 @@ d_raw <- d_raw[grep(paste0(prefixes, collapse = "|"), d_raw$pid),] # only includ
 ## ----rm_outliers---------------------------------------------
 # the approach is taken here to remove a subject from ALL metrics of a module
 # if they are an outlier in ANY metrics of that module, to improve interpretation b/w metrics
-# in any given module.
 # any outliers removed in the BRT data will be excluded from ALL metrics for ALL modules.
 
 bad_subs = vector("list", length(unique(d_raw$grade)))
 for (i in 1:length(vars_of_interest)) {# for each grade, concatenates outliers ACROSS metrics of interest
   for (j in 1:length(unique(d_raw$grade))) {
-    if(dim(filter(d_raw, grade == unique(d_raw$grade)[j]))[1] > 2) {
+    # need this to verify that there are >2 valid data pts in this grade level to do the outlier test
+    these_vals_temp = with(d_raw, get(vars_of_interest[i])[grade == unique(d_raw$grade)[j] & !is.na(get(vars_of_interest[i]))])
+    if(length(these_vals_temp) > 2) {
       these_bad_subs = d_raw %>%
         filter(grade == unique(d_raw$grade)[j]) %>%
         with(
@@ -39,6 +40,12 @@ if(this_task == "BRT") { # edge case, don't append BRT to itself
   d <- d %>%
     brt_append() %>%
     clean_grade_gender()}
+# NB: gender is effect coded female: -1 male: 1
+# such that a POSITIVE beta estimate for RT change by gender indicates that FEMALES are faster (RT for males HIGHER)
+
+asis_output("##n by grade and gender")
+cat("\n") %>% asis_output()
+table(d$grade_label, d$gender)
 
 ## ----qc_graphs-----------------------------------------------------------
 asis_output("##quality control histograms")
@@ -89,16 +96,18 @@ if(is.na(score_formula)) {
     d_score = d_score %>%
       summarize_(var1_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[1])),
                  var1_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[1])))
+   cat("var1: ", score_vars) 
   } else if(length(score_vars) == 2) {
     d_score = d_score %>%
       summarize_(var1_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[1])),
                  var1_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[1])),
                  var2_mean = interp(~mean(a, na.rm=T), a = as.name(score_vars[2])),
                  var2_sd = interp(~sd(a, na.rm=T), a = as.name(score_vars[2])))
-  }
-  print(score_vars)
+  cat("var1:", score_vars[1], "\nvar2:", score_vars[2])
+    }
   
 } else if(score_formula == "fraction") {
+  cat("score formula: ((((b-a)/a) * 100) + 100) \na:", score_vars[1], "\nb:", score_vars[2])
   d_score = d %>%
     mutate_(score = interp(~((((b-a)/a)*100)+100), a = as.name(score_vars[1]), b = as.name(score_vars[2]))) %>%
     group_by(grade) %>%
