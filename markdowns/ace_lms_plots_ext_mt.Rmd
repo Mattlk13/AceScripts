@@ -24,7 +24,7 @@ source("../R/brt_append.R") # loading in helper functions
 source("../R/clean_grade_gender.R")
 source("../R/get_outlier_subs.R")
 # note to self: now I am extremely concerned about multiple comparisons... I'll do an FDR using n = n_modules * n_varspermodule at some point?
-# note: does NOT support flexibility in grade labels (expects 3rd/5th/7th grade); this will be fixed later to expect grades based on what is in the cached dataframe
+# note: supports flexibility in grade labels, but please beware of over-interpreting gradewise differences when N by grade is low
 ```
 
 ```{r defining printing args READ ME}
@@ -34,7 +34,7 @@ BOX_PRINT = T
 FLANK_PRINT = T
 SAAT_PRINT = T
 SPAN_PRINT = T
-BSPAN_PRINT = FALSE
+BSPAN_PRINT = T
 STROOP_PRINT = T
 SWITCH_PRINT = T
 TNT_PRINT = T
@@ -51,7 +51,7 @@ Z_SCORE_XREGS = FALSE
 
 ```{r loading cached -by hand- data}
 # load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
-load(file = "~/Dropbox/aceR/real_test_data_092716/preproc_data.RData")
+load(file = "~/Dropbox/aceR/ace_data_10.6.2016/preproc_data.RData")
 ```
 
 ```{r read_chunking, cache=FALSE}
