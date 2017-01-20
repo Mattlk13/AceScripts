@@ -3,7 +3,7 @@
 # uses grubb's test in the outliers package
 require(outliers)
 get_outlier_subs = function(vec, id_col, alpha = .05) {
- test = grubbs.test(vec, two.sided = TRUE)
+ test = outliers::grubbs.test(vec, two.sided = TRUE)
  bad_subs = NULL
  repeat{
    if(test$p.value > alpha) break
