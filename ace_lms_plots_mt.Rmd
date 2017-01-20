@@ -43,7 +43,7 @@ Z_SCORE_XREGS = FALSE
 
 
 ```{r loading cached -by hand- data}
-load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
+load(file = "~/Documents/ace_large_data/pulvinar_data_120316/preproc_data.RData")
 ```
 
 ```{r purling, eval=FALSE}
