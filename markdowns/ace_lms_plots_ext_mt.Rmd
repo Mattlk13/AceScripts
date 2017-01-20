@@ -45,13 +45,13 @@ OUTLIER_PRINT = TRUE
 QC_HIST_PRINT = TRUE
 
 # Please set this to TRUE or FALSE depending on whether you would like ALL continuous x-regressors z-scored. They will always be mean-centered; this just z-scores them by further dividing them by std dev.
-Z_SCORE_XREGS = FALSE
+Z_SCORE_XREGS = TRUE
 ```
 
 
 ```{r loading cached -by hand- data}
 # load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
-load(file = "~/Dropbox/aceR/ace_data_10.6.2016/preproc_data.RData")
+load(file = "~/Documents/ace_large_data/almost_all_preproc_122816.RData")
 ```
 
 ```{r read_chunking, cache=FALSE}
@@ -59,16 +59,18 @@ read_chunk("../markdowns/single_module_md.R")
 ```
 
 ```{r school prefixes}
-prefixes = c("br", "pe", "la", "mi", "se")
-schools = c("Bracher", "Peterson", "Laurelwood", "Millenium", "Seacrest")
+prefixes = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk")
+schools = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin")
+# millenium (mi) currently being excluded by request
 ```
 
 
 ```{r setting vars for BRT READ ME}
 this_task = "BRT"
 this_task_long = "BRT"
-vars_of_interest = c("rt_mean.right", "rt_mean.left")
-vars_of_interest_long = c("Mean RT--right hand", "Mean RT--left hand") # nice version for printing in graphs
+outlier_vars = c("rt_mean.right", "rt_mean.left")
+vars_of_interest = c("rt_mean.dominant", "rt_mean.nondominant")
+vars_of_interest_long = c("Mean RT--dominant hand", "Mean RT--non-dominant hand") # nice version for printing in graphs
 score_vars = c("rt_mean.overall")
 score_formula = NA
 ```
@@ -76,17 +78,24 @@ score_formula = NA
 ```{r ref.label="df_from_proc_demo"}
 ```
 
-```{r ref.label="rm_outliers"}
-# notes from seacrest, to be noted elsewhere:
-# when testing MEDIAN RT:
-# b016 (5th grade) is high side (slow RT) outlier by Grubbs' two sided test (p = .020)
-# no other outliers when b016 excluded
-# when testing MEAN RT:
-# no outliers found at this threshold (b016 is trending here though)
+```{r ref.label="rm_outliers_diff_vars"}
 ```
 
-```{r ref.label="preproc"}
+```{r ref.label="rm_short_rts_diff_vars", eval=BRT_PRINT}
+```
+
+```{r brt preproc}
 # always run this irrespective of BRT_PRINT
+d <- d %>%
+  clean_grade_gender() %>%
+  mutate(rt_mean.dominant = if_else(handedness == "R", rt_mean.right, rt_mean.left, NA_real_),
+         rt_mean.nondominant = if_else(handedness == "L", rt_mean.right, rt_mean.left, NA_real_),
+         acc_mean.dominant = if_else(handedness == "R", acc_mean.right, acc_mean.left, NA_real_),
+         acc_mean.nondominant = if_else(handedness == "L", acc_mean.right, acc_mean.left, NA_real_))
+
+asis_output("##n by grade and gender")
+cat("\n") %>% asis_output()
+table(d$grade_label, d$gender)
 ```
 
 ```{r caching brt for appending to subsequent modules}
@@ -99,7 +108,41 @@ brt <- d
 ```{r ref.label="qc_graphs", eval=(BRT_PRINT & QC_HIST_PRINT)}
 ```
 
-```{r ref.label="lms_brt_only", eval=BRT_PRINT}
+```{r brt lms, eval=BRT_PRINT}
+# edge case here where BRT can't be regressed against itself
+asis_output("##regressions")
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d %>%
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
+
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[2], sep = "") %>%
+  asis_output()
+d %>%
+  with(summary(lm(get(vars_of_interest[2]) ~ grade * gender)))
+```
+
+```{r ref.label="graphs", eval=BRT_PRINT}
+```
+
+```{r brt lms by acc, eval=BRT_PRINT}
+vars_of_interest = c("acc_mean.dominant", "acc_mean.nondominant")
+vars_of_interest_long = c("Accuracy--dominant hand", "Accuracy--non-dominant hand") 
+
+asis_output("##regressions")
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d %>%
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
+
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[2], sep = "") %>%
+  asis_output()
+d %>%
+  with(summary(lm(get(vars_of_interest[2]) ~ grade * gender)))
 ```
 
 ```{r ref.label="graphs", eval=BRT_PRINT}
@@ -108,8 +151,15 @@ brt <- d
 ```{r setting vars for boxed READ ME}
 this_task = "BOXED"
 this_task_long = "Boxed"
-vars_of_interest = "rt_mean.overall"
-vars_of_interest_long = "Mean overall RT" # nice version for printing in graphs
+outlier_vars = "rt_mean.overall"
+vars_of_interest = c("rt_mean.feature", "rt_mean.conjunction", "rt_mean.cost")
+vars_of_interest_long = c("Mean overall RT, feature trials", "Mean overall RT, conjunction trials", "Mean cost of conjunction on RT (conj - feat)") # nice version for printing in graphs
+vars_of_interest_acc = list(c("rt_mean.correct.feature", "rt_mean.incorrect.feature"),
+                            c("rt_mean.correct.conjunction", "rt_mean.incorrect.conjunction"),
+                            c("rt_mean.correct.cost", "rt_mean.incorrect.cost"))
+vars_of_interest_acc_long = list(c("Mean RT--feature trials, correct press", "Mean RT--feature trials, incorrect press"),
+                                 c("Mean RT--conjunction trials, correct press", "Mean RT--conjunction trials, incorrect press"),
+                                 c("Mean cost (conj - feat) on RT--correct press", "Mean cost (conj - feat) on RT--incorrect press"))
 score_vars = c("rt_mean.conjunction_4", "rt_mean.conjunction_12")
 score_formula = "fraction"
 ```
@@ -117,16 +167,55 @@ score_formula = "fraction"
 ```{r ref.label="df_from_proc_demo", eval=BOX_PRINT}
 ```
 
-```{r ref.label="rm_outliers", eval=BOX_PRINT}
+```{r ref.label="rm_outliers_diff_vars", eval=BOX_PRINT}
+```
+
+```{r ref.label="rm_short_rts_diff_vars", eval=BOX_PRINT}
 ```
 
 ```{r ref.label="preproc", eval=BOX_PRINT}
 ```
 
+```{r boxed extra preproc, eval=BOX_PRINT}
+d <- d %>%
+  mutate(rt_mean.conjunction = (rt_mean.conjunction_12 + rt_mean.conjunction_4) / 2,
+         rt_mean.feature = (rt_mean.feature_12 + rt_mean.feature_4) / 2,
+         rt_mean.cost = rt_mean.conjunction - rt_mean.feature,
+         rt_mean.correct.conjunction = (rt_mean.correct.conjunction_12 + rt_mean.correct.conjunction_4) / 2,
+         rt_mean.correct.feature = (rt_mean.correct.feature_12 + rt_mean.correct.feature_4) / 2,
+         rt_mean.correct.cost = rt_mean.correct.conjunction - rt_mean.correct.feature,
+         rt_mean.incorrect.conjunction = (rt_mean.incorrect.conjunction_12 + rt_mean.incorrect.conjunction_4) / 2,
+         rt_mean.incorrect.feature = (rt_mean.incorrect.feature_12 + rt_mean.incorrect.feature_4) / 2,
+         rt_mean.incorrect.cost = rt_mean.incorrect.conjunction - rt_mean.incorrect.feature)
+```
+
+
 ```{r ref.label="score_feedback_means", eval=BOX_PRINT}
 ```
 
 ```{r ref.label="qc_graphs", eval=(BOX_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=BOX_PRINT}
+```
+
+```{r ref.label="lms_by_acc", eval=BOX_PRINT}
+```
+
+```{r ref.label="graphs", eval=BOX_PRINT}
+```
+
+```{r ref.label="graphs_by_acc", eval=BOX_PRINT}
+```
+
+```{r boxed resetting vars of interest to acc, eval=BOX_PRINT}
+d <- d %>%
+  mutate(acc_mean.feature = (acc_mean.feature_4 + acc_mean.feature_12) / 2,
+         acc_mean.conjunction = (acc_mean.conjunction_4 + acc_mean.conjunction_12) / 2,
+         acc_mean.cost = acc_mean.conjunction - acc_mean.feature)
+
+vars_of_interest = c("acc_mean.feature", "acc_mean.conjunction", "acc_mean.cost")
+vars_of_interest_long = c("Accuracy, feature trials", "Accuracy, conjunction trials", "Accuracy cost (conj - feat)") # nice version for printing in graphs
 ```
 
 ```{r ref.label="lms", eval=BOX_PRINT}
@@ -140,6 +229,12 @@ this_task = "FLANKER"
 this_task_long = "Flanker"
 vars_of_interest = c("rt_mean.congruent","rt_mean.incongruent","rt_mean.cost")
 vars_of_interest_long = c("Mean RT--congruent trials", "Mean RT--incongruent trials", "Mean cost of incongruence on RT") # nice version for printing in graphs
+vars_of_interest_acc = list(c("rt_mean.correct.congruent", "rt_mean.incorrect.congruent"),
+                            c("rt_mean.correct.incongruent", "rt_mean.incorrect.incongruent"),
+                            c("rt_mean.correct.cost", "rt_mean.incorrect.cost"))
+vars_of_interest_acc_long = list(c("Mean RT--congruent trials, correct press", "Mean RT--congruent trials, incorrect press"),
+                                 c("Mean RT--incongruent trials, correct press", "Mean RT--incongruent trials, incorrect press"),
+                                 c("Mean cost of incongruence on RT--correct press", "Mean cost of incongruence on RT--incorrect press"))
 score_vars = c("rt_mean.congruent", "rt_mean.incongruent")
 score_formula = "fraction"
 ```
@@ -148,6 +243,9 @@ score_formula = "fraction"
 ```
 
 ```{r ref.label="rm_outliers", eval=FLANK_PRINT}
+```
+
+```{r ref.label="rm_short_rts", eval=FLANK_PRINT}
 ```
 
 ```{r ref.label="preproc", eval=FLANK_PRINT}
@@ -162,14 +260,35 @@ score_formula = "fraction"
 ```{r ref.label="lms", eval=FLANK_PRINT}
 ```
 
+```{r ref.label="lms_by_acc", eval=FLANK_PRINT}
+```
+
+```{r ref.label="graphs", eval=FLANK_PRINT}
+```
+
+```{r ref.label="graphs_by_acc", eval=FLANK_PRINT}
+```
+
+```{r flanker resetting vars of interest to acc, eval=FLANK_PRINT}
+vars_of_interest = c("acc_mean.congruent", "acc_mean.incongruent", "acc_mean.cost")
+vars_of_interest_long = c("Accuracy, congruent trials", "Accuracy, incongruent trials", "Accuracy cost (incong - cong)") # nice version for printing in graphs
+```
+
+```{r ref.label="lms", eval=FLANK_PRINT}
+```
+
 ```{r ref.label="graphs", eval=FLANK_PRINT}
 ```
 
 ```{r setting vars for saat READ ME}
 this_task = "SAAT"
 this_task_long = "SAAT"
-vars_of_interest = c("rt_mean.sustained","rt_mean.impulsive")
-vars_of_interest_long = c("Mean RT--sustained trials", "Mean RT--impulsive trials") # nice version for printing in graphs
+vars_of_interest = c("rt_mean.correct.sustained","rt_mean.correct.impulsive")
+vars_of_interest_long = c("Mean hit RT--sustained trials", "Mean hit RT--impulsive trials") # nice version for printing in graphs
+vars_of_interest_acc = list(c("rt_mean.correct.sustained", "rt_mean.incorrect.sustained"),
+                            c("rt_mean.correct.impulsive", "rt_mean.incorrect.impulsive"))
+vars_of_interest_acc_long = list(c("Mean RT--sustained trials, correct press", "Mean RT--sustained trials, incorrect press"),
+                                 c("Mean RT--impulsive trials, correct press", "Mean RT--impulsive trials, incorrect press"))
 score_vars = vars_of_interest
 score_formula = NA
 ```
@@ -180,13 +299,60 @@ score_formula = NA
 ```{r ref.label="rm_outliers", eval=SAAT_PRINT}
 ```
 
+```{r ref.label="rm_short_rts", eval=SAAT_PRINT}
+```
+
 ```{r ref.label="preproc", eval=SAAT_PRINT}
+```
+
+```{r saat extra preproc, eval=SAAT_PRINT}
+# as of 1/10/17: the aceR pipeline now switches the imp/sus labels! whee
+# 1 - acc_mean.0 roughly yields FA rate (true NRs get counted as CRs??), since acc_mean.0 is CR rate
+d <- d %>% # dumb snodgrassing
+  mutate(acc_mean.1.impulsive = if_else(acc_mean.1.impulsive == 1, .9999, acc_mean.1.impulsive),
+         acc_mean.1.sustained = if_else(acc_mean.1.sustained == 1, .9999, acc_mean.1.sustained),
+         acc_mean.0.impulsive = if_else(acc_mean.0.impulsive == 1, .9999, acc_mean.0.impulsive),
+         acc_mean.0.sustained = if_else(acc_mean.0.sustained == 1, .9999, acc_mean.0.sustained),
+         acc_mean.1.impulsive = if_else(acc_mean.1.impulsive == 0, .0001, acc_mean.1.impulsive),
+         acc_mean.1.sustained = if_else(acc_mean.1.sustained == 0, .0001, acc_mean.1.sustained),
+         acc_mean.0.impulsive = if_else(acc_mean.0.impulsive == 0, .0001, acc_mean.0.impulsive),
+         acc_mean.0.sustained = if_else(acc_mean.0.sustained == 0, .0001, acc_mean.0.sustained),
+         dprime.impulsive = qnorm(acc_mean.1.impulsive) - qnorm(1 - acc_mean.0.impulsive),
+         dprime.sustained = qnorm(acc_mean.1.sustained) - qnorm(1 - acc_mean.0.sustained))
 ```
 
 ```{r ref.label="score_feedback_means", eval=SAAT_PRINT}
 ```
 
 ```{r ref.label="qc_graphs", eval=(SAAT_PRINT & QC_HIST_PRINT)}
+```
+
+```{r ref.label="lms", eval=SAAT_PRINT}
+```
+
+```{r ref.label="lms_by_acc", eval=SAAT_PRINT}
+```
+
+```{r ref.label="graphs", eval=SAAT_PRINT}
+```
+
+```{r ref.label="graphs_by_acc", eval=SAAT_PRINT}
+```
+
+```{r saat resetting vars of interest to dprime, eval=SAAT_PRINT}
+vars_of_interest = c("dprime.sustained", "dprime.impulsive")
+vars_of_interest_long = c("d', sustained trials", "d', impulsive trials")
+```
+
+```{r ref.label="lms", eval=SAAT_PRINT}
+```
+
+```{r ref.label="graphs", eval=SAAT_PRINT}
+```
+
+```{r saat resetting vars of interest to raw acc, eval=SAAT_PRINT}
+vars_of_interest = c("acc_mean.sustained", "acc_mean.impulsive")
+vars_of_interest_long = c("Accuracy (hits + CRs), sustained trials", "Accuracy (hits + CRs), impulsive trials")
 ```
 
 ```{r ref.label="lms", eval=SAAT_PRINT}
@@ -217,7 +383,7 @@ score_formula = NA
 ```{r ref.label="qc_graphs", eval=(SPAN_PRINT & QC_HIST_PRINT)}
 ```
 
-```{r ref.label="lms", eval=SPAN_PRINT}
+```{r ref.label="lms_no_brt", eval=SPAN_PRINT}
 ```
 
 ```{r ref.label="graphs", eval=SPAN_PRINT}
@@ -245,18 +411,23 @@ score_formula = NA
 ```{r ref.label="qc_graphs", eval=(BSPAN_PRINT & QC_HIST_PRINT)}
 ```
 
-```{r ref.label="lms", eval=BSPAN_PRINT}
+```{r ref.label="lms_no_brt", eval=BSPAN_PRINT}
 ```
 
 ```{r ref.label="graphs", eval=BSPAN_PRINT}
 ```
-
 
 ```{r setting vars for stroop READ ME}
 this_task = "STROOP"
 this_task_long = "Stroop task"
 vars_of_interest = c("rt_mean.congruent","rt_mean.incongruent","rt_mean.cost")
 vars_of_interest_long = c("Mean RT--congruent trials", "Mean RT--incongruent trials", "Mean cost of incongruence on RT") # nice version for printing in graphs
+vars_of_interest_acc = list(c("rt_mean.correct.congruent", "rt_mean.incorrect.congruent"),
+                            c("rt_mean.correct.incongruent", "rt_mean.incorrect.incongruent"),
+                            c("rt_mean.correct.cost", "rt_mean.incorrect.cost"))
+vars_of_interest_acc_long = list(c("Mean RT--congruent trials, correct press", "Mean RT--congruent trials, incorrect press"),
+                                 c("Mean RT--incongruent trials, correct press", "Mean RT--incongruent trials, incorrect press"),
+                                 c("Mean cost of incongruence on RT--correct press", "Mean cost of incongruence on RT--incorrect press"))
 score_vars = c("rt_mean.congruent", "rt_mean.incongruent")
 score_formula = "fraction"
 ```
@@ -265,6 +436,9 @@ score_formula = "fraction"
 ```
 
 ```{r ref.label="rm_outliers", eval=STROOP_PRINT}
+```
+
+```{r ref.label="rm_short_rts", eval=STROOP_PRINT}
 ```
 
 ```{r ref.label="preproc", eval=STROOP_PRINT}
@@ -279,14 +453,37 @@ score_formula = "fraction"
 ```{r ref.label="lms", eval=STROOP_PRINT}
 ```
 
+```{r ref.label="lms_by_acc", eval=STROOP_PRINT}
+```
+
+```{r ref.label="graphs", eval=STROOP_PRINT}
+```
+
+```{r ref.label="graphs_by_acc", eval=STROOP_PRINT}
+```
+
+```{r stroop resetting vars of interest to acc, eval=STROOP_PRINT}
+vars_of_interest = c("acc_mean.congruent", "acc_mean.incongruent", "acc_mean.cost")
+vars_of_interest_long = c("Accuracy, congruent trials", "Accuracy, incongruent trials", "Accuracy cost (incong - cong)") # nice version for printing in graphs
+```
+
+```{r ref.label="lms", eval=STROOP_PRINT}
+```
+
 ```{r ref.label="graphs", eval=STROOP_PRINT}
 ```
 
 ```{r setting vars for task switch READ ME}
 this_task = "TASKSWITCH"
 this_task_long = "Task switch"
-vars_of_interest = c("rt_mean.stay","rt_mean.switch")
-vars_of_interest_long = c("Mean RT--stay trials", "Mean RT--switch trials") # nice version for printing in graphs
+vars_of_interest = c("rt_mean.stay","rt_mean.switch", "rt_mean.cost")
+vars_of_interest_long = c("Mean RT--stay trials", "Mean RT--switch trials", "Mean cost on RT (switch - stay)") # nice version for printing in graphs
+vars_of_interest_acc = list(c("rt_mean.correct.stay", "rt_mean.incorrect.stay"),
+                            c("rt_mean.correct.switch", "rt_mean.incorrect.switch"),
+                            c("rt_mean.correct.cost", "rt_mean.incorrect.cost"))
+vars_of_interest_acc_long = list(c("Mean RT--stay trials, correct press", "Mean RT--stay trials, incorrect press"),
+                                 c("Mean RT--switch trials, correct press", "Mean RT--switch trials, incorrect press"),
+                                 c("Mean cost of switching on RT--correct press", "Mean cost of switching on RT--incorrect press"))
 score_vars = vars_of_interest 
 score_formula = NA
 ```
@@ -295,6 +492,9 @@ score_formula = NA
 ```
 
 ```{r ref.label="rm_outliers", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="rm_short_rts", eval=SWITCH_PRINT}
 ```
 
 ```{r ref.label="preproc", eval=SWITCH_PRINT}
@@ -309,14 +509,37 @@ score_formula = NA
 ```{r ref.label="lms", eval=SWITCH_PRINT}
 ```
 
+```{r ref.label="lms_by_acc", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="graphs", eval=SWITCH_PRINT}
+```
+
+```{r ref.label="graphs_by_acc", eval=SWITCH_PRINT}
+```
+
+```{r switch resetting vars of interest to acc, eval=SWITCH_PRINT}
+vars_of_interest = c("acc_mean.switch", "acc_mean.stay", "acc_mean.cost")
+vars_of_interest_long = c("Accuracy, switch trials", "Accuracy, stay trials", "Accuracy cost (switch - stay)") # nice version for printing in graphs
+```
+
+```{r ref.label="lms", eval=SWITCH_PRINT}
+```
+
 ```{r ref.label="graphs", eval=SWITCH_PRINT}
 ```
 
 ```{r setting vars for tap n trace READ ME}
 this_task = "TNT"
 this_task_long = "Tap and trace"
-vars_of_interest = c("rt_mean.tap_only","rt_mean.tap_trace")
-vars_of_interest_long = c("Mean RT--tap only trials", "Mean RT--tap and trace trials") # nice version for printing in graphs
+vars_of_interest = c("rt_mean.tap_only","rt_mean.tap_trace", "rt_mean.cost")
+vars_of_interest_long = c("Mean RT--tap only trials", "Mean RT--tap and trace trials", "Mean cost of dual task on RT (tap&trace - tap only)") # nice version for printing in graphs
+vars_of_interest_acc = list(c("rt_mean.correct.tap_only", "rt_mean.incorrect.tap_only"),
+                            c("rt_mean.correct.tap_trace", "rt_mean.incorrect.tap_trace"),
+                            c("rt_mean.correct.cost", "rt_mean.incorrect.cost"))
+vars_of_interest_acc_long = list(c("Mean RT--tap only trials, correct press", "Mean RT--tap only trials, incorrect press"),
+                                 c("Mean RT--tap & trace trials, correct press", "Mean RT--tap & trace trials, incorrect press"),
+                                 c("Mean cost of dual task on RT--correct press", "Mean cost of dual task on RT--incorrect press"))
 score_vars = vars_of_interest
 score_formula = NA
 ```
@@ -325,6 +548,9 @@ score_formula = NA
 ```
 
 ```{r ref.label="rm_outliers", eval=TNT_PRINT}
+```
+
+```{r ref.label="rm_short_rts", eval=TNT_PRINT}
 ```
 
 ```{r ref.label="preproc", eval=TNT_PRINT}
@@ -339,7 +565,13 @@ score_formula = NA
 ```{r ref.label="lms", eval=TNT_PRINT}
 ```
 
+```{r ref.label="lms_by_acc", eval=TNT_PRINT}
+```
+
 ```{r ref.label="graphs", eval=TNT_PRINT}
+```
+
+```{r ref.label="graphs_by_acc", eval=TNT_PRINT}
 ```
 
 ```{r setting vars for filter READ ME}
@@ -354,10 +586,13 @@ score_formula = NA
 ```{r ref.label="df_from_proc_demo", eval=FILTER_PRINT}
 ```
 
-```{r ref.label="rm_outliers", eval=FILTER_PRINT}
+```{r ref.label="preproc", eval=FILTER_PRINT}
 ```
 
-```{r ref.label="preproc", eval=FILTER_PRINT}
+```{r filter extra preproc, eval=FILTER_PRINT}
+d <- d %>%
+  mutate(rt_mean.2 = (rt_mean.correct.2 + rt_mean.incorrect.2) / 2,
+         rt_mean.4 = (rt_mean.correct.4 + rt_mean.incorrect.4) / 2)
 ```
 
 ```{r ref.label="score_feedback_means", eval=FILTER_PRINT}
@@ -366,8 +601,78 @@ score_formula = NA
 ```{r ref.label="qc_graphs", eval=(FILTER_PRINT & QC_HIST_PRINT)}
 ```
 
-```{r ref.label="lms_filter_only", eval=FILTER_PRINT}
+```{r filter lms, eval=FILTER_PRINT}
+# this one has to be special because we're also regressing by distractor number which doesn't apply for other modules
+asis_output("##regressions")
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d %>%
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender * distractors)))
+
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[2], sep = "") %>%
+  asis_output() # dumb: they have to be in two separate if statements to get the heading to render
+d %>%
+  with(summary(lm(get(vars_of_interest[2]) ~ grade * gender * distractors)))
 ```
 
-```{r ref.label="graphs_filter_only", eval=FILTER_PRINT}
+```{r filter graphs, eval=FILTER_PRINT}
+# again special because need to plot by distractor number
+asis_output("##graphs")
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+
+d_plot <- d %>%
+  group_by(grade_label, distractors) %>%
+  summarize(k.2.mean = mean(k.2, na.rm = T),
+            k.4.mean = mean(k.4, na.rm = T),
+            k.2.se = sd(k.2, na.rm = T)/sqrt(length(!is.na(k.2))),
+            k.4.se = sd(k.4, na.rm = T)/sqrt(!is.na(length(k.4))))
+
+d_plot %>%
+  ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[1], ".mean")), color = factor(grade_label))) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = get(paste0(vars_of_interest[1], ".mean")) - get(paste0(vars_of_interest[1], ".se")),
+                    ymax = get(paste0(vars_of_interest[1], ".mean")) + get(paste0(vars_of_interest[1], ".se")),
+                    width = 0.5)) +
+  labs(y = vars_of_interest_long[1]) +
+  guides(color = guide_legend(title = "Grade"))
+
+cat("\n") %>% asis_output()
+paste("###", vars_of_interest_long[2], sep = "") %>%
+  asis_output()
+
+d_plot %>%
+  ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[2], ".mean")), color = factor(grade_label))) +
+  geom_point() +
+  geom_line() +
+  geom_errorbar(aes(ymin = get(paste0(vars_of_interest[2], ".mean")) - get(paste0(vars_of_interest[2], ".se")),
+                    ymax = get(paste0(vars_of_interest[2], ".mean")) + get(paste0(vars_of_interest[2], ".se")),
+                    width = 0.5)) +
+  labs(y = vars_of_interest_long[2]) +
+  guides(color = guide_legend(title = "Grade"))
+```
+
+```{r filter resetting vars of interest to rt, eval=FILTER_PRINT}
+vars_of_interest = c("rt_mean.2", "rt_mean.4")
+vars_of_interest_long = c("Mean RT, 2 targets", "Mean RT, 4 targets")
+vars_of_interest_acc = list(c("rt_mean.correct.2", "rt_mean.incorrect.2"),
+                            c("rt_mean.correct.4", "rt_mean.incorrect.4"))
+vars_of_interest_acc_long = list(c("Mean RT--2 targets trials, correct press", "Mean RT--2 targets trials, incorrect press"),
+                                 c("Mean RT--4 targets trials, correct press", "Mean RT--4 targets trials, incorrect press"))
+```
+
+```{r ref.label="lms", eval=FILTER_PRINT}
+```
+
+```{r ref.label="graphs", eval=FILTER_PRINT}
+```
+
+```{r ref.label="lms_by_acc", eval=FILTER_PRINT}
+```
+
+```{r ref.label="graphs_by_acc", eval=FILTER_PRINT}
 ```
