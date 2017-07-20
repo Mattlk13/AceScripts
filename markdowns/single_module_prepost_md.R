@@ -5,8 +5,8 @@ if(this_task == "BRT" & !BRT_PRINT) {} else { # edge case where BRT needs to be 
     asis_output()}
 cat("\n") %>% asis_output() # need this for line breaking
 
-d_pre_raw <- proc_sc_pre[[this_task]]
-d_post_raw <- proc_sc_post[[this_task]]
+d_pre_raw <- proc_pre[[this_task]]
+d_post_raw <- proc_post[[this_task]]
 
 # d_raw <- d_raw[grep(paste0(prefixes, collapse = "|"), d_raw$pid),] # only including data from real Ss (with school-specific ID prefixes)
 

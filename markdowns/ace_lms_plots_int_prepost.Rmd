@@ -77,42 +77,56 @@ score_formula = NA
 ```
 
 ```{r brt load}
+grab_module <- function(proc_demo, this_task) {
+  d_raw <- proc_demo[[this_task]]
+  d_raw <- d_raw[grep(paste0(prefixes, collapse = "|"), d_raw$pid),] # only including data from real Ss (with school-specific ID prefixes)
+  d_raw = d_raw %>% filter(time != "0", time != "TIME:", !is.na(grade))
+  return (d_raw)
+}
+
 if(this_task == "BRT" & !BRT_PRINT) {} else { # edge case where BRT needs to be evaluated even if no print (and thus header turned off)
   paste0("#", this_task_long) %>%
     asis_output()}
 cat("\n") %>% asis_output() # need this for line breaking
 
-d_pre_raw <- proc_pre[[this_task]]
-d_post_raw <- proc_post[[this_task]]
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
 ```
 
 ```{r brt pre outliers}
-remove_outlier_subs <- function(d_raw, vars_of_interest) {
+find_outliers <- function(d_raw, vars) {
   bad_subs = vector("list", length(unique(d_raw$grade)))
-  for (i in 1:length(vars_of_interest)) {# for each grade, concatenates outliers ACROSS metrics of interest
+  
+  for (i in 1:length(vars)) {# for each grade, concatenates vars ACROSS metrics of interest
     for (j in 1:length(unique(d_raw$grade))) {
       # need this to verify that there are >2 valid data pts in this grade level to do the outlier test
-      these_vals_temp = with(d_raw, get(vars_of_interest[i])[grade == unique(grade)[j] & !is.na(get(vars_of_interest[i]))])
+      these_vals_temp = with(d_raw, get(vars[i])[grade == unique(grade)[j] & !is.na(get(vars[i]))])
       if(length(these_vals_temp) > 2) {
         these_bad_subs = d_raw %>%
           filter(grade == unique(grade)[j]) %>%
           with(
-            get_outlier_subs(get(vars_of_interest[i]), pid))
+            get_outlier_subs(get(vars[i]), pid))
       } else {these_bad_subs = NULL}
-      if(!is.null(these_bad_subs)) {bad_subs[[j]] <- c(bad_subs[[j]], these_bad_subs)}
+      if(!is.null(these_bad_subs)) {bad_subs[[j]] = c(bad_subs[[j]], these_bad_subs)}
     }
   }
-  
-  return(d_raw %>% filter(!(pid %in% unlist(bad_subs))))
+  return (unlist(bad_subs))
 }
 
-d_pre = remove_outlier_subs(d_pre_raw, vars_of_interest) %>%
-  clean_grade_gender()
+bad_subs = find_outliers(d_raw, outlier_vars)
+d_pre <- d_pre_raw %>%
+  filter(!(pid %in% bad_subs))
 ```
 
 ```{r caching brt pre for appending to subsequent modules}
 brt_pre <- d_pre
 ```
+
+```{r brt preproc}
+d <- d %>%
+  clean_grade_gender()
+```
+
 
 ```{r score feedback brt pre, eval=BRT_PRINT}
 asis_output("##Pre\n")

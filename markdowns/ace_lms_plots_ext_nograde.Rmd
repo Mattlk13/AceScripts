@@ -21,7 +21,7 @@ library(gtools)
 
 
 source("../R/brt_append.R") # loading in helper functions
-source("../R/clean_grade_gender.R")
+source("../R/clean_gender.R")
 source("../R/get_outlier_subs.R")
 # note to self: now I am extremely concerned about multiple comparisons... I'll do an FDR using n = n_modules * n_varspermodule at some point?
 # note: supports flexibility in grade labels, but please beware of over-interpreting gradewise differences when N by grade is low
@@ -32,13 +32,13 @@ source("../R/get_outlier_subs.R")
 BRT_PRINT = T
 BOX_PRINT = T
 FLANK_PRINT = T
-SAAT_PRINT = T
-SPAN_PRINT = T
-BSPAN_PRINT = T
-STROOP_PRINT = T
-SWITCH_PRINT = T
-TNT_PRINT = T
-FILTER_PRINT = T
+SAAT_PRINT = F
+SPAN_PRINT = F
+BSPAN_PRINT = F
+STROOP_PRINT = F
+SWITCH_PRINT = F
+TNT_PRINT = F
+FILTER_PRINT = F
 
 # Please set these to TRUE or FALSE depending on whether you would like outlier checking info or quality control histograms printed for ALL modules or not. Even if these are set to TRUE, they will not print for modules which have been turned off (set as FALSE) in the above block.
 OUTLIER_PRINT = TRUE
@@ -51,19 +51,12 @@ Z_SCORE_XREGS = TRUE
 
 ```{r loading cached -by hand- data}
 # load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
-load(file = "~/Documents/ace_large_data/almost_all_preproc_122816.RData")
+load(file = "~/Documents/ace_large_data/DO PROCESS/16p/preproc_data.RData")
 ```
 
 ```{r read_chunking, cache=FALSE}
-read_chunk("../markdowns/single_module_md.R")
+read_chunk("../markdowns/single_module_md_nograde.R")
 ```
-
-```{r school prefixes}
-prefixes = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk")
-schools = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin")
-# millenium (mi) currently being excluded by request
-```
-
 
 ```{r setting vars for BRT READ ME}
 this_task = "BRT"
@@ -87,15 +80,15 @@ score_formula = NA
 ```{r brt preproc}
 # always run this irrespective of BRT_PRINT
 d <- d %>%
-  clean_grade_gender() %>%
+  clean_gender() %>%
   mutate(rt_mean.dominant = if_else(handedness == "R", rt_mean.right, rt_mean.left, NA_real_),
          rt_mean.nondominant = if_else(handedness == "L", rt_mean.right, rt_mean.left, NA_real_),
          acc_mean.dominant = if_else(handedness == "R", acc_mean.right, acc_mean.left, NA_real_),
          acc_mean.nondominant = if_else(handedness == "L", acc_mean.right, acc_mean.left, NA_real_))
 
-asis_output("##n by grade and gender")
+asis_output("##n by gender")
 cat("\n") %>% asis_output()
-table(d$grade_label, d$gender)
+table(d$gender)
 ```
 
 ```{r caching brt for appending to subsequent modules}
@@ -115,13 +108,13 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
+  with(summary(lm(get(vars_of_interest[1]) ~ age * gender)))
 
 cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[2]) ~ grade * gender)))
+  with(summary(lm(get(vars_of_interest[2]) ~ age * gender)))
 ```
 
 ```{r ref.label="graphs", eval=BRT_PRINT}
@@ -136,13 +129,13 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
+  with(summary(lm(get(vars_of_interest[1]) ~ age * gender)))
 
 cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[2]) ~ grade * gender)))
+  with(summary(lm(get(vars_of_interest[2]) ~ age * gender)))
 ```
 
 ```{r ref.label="graphs", eval=BRT_PRINT}
@@ -162,7 +155,6 @@ vars_of_interest_acc_long = list(c("Mean RT--feature trials, correct press", "Me
                                  c("Mean cost (conj - feat) on RT--correct press", "Mean cost (conj - feat) on RT--incorrect press"))
 score_vars = c("rt_mean.conjunction_4", "rt_mean.conjunction_12")
 score_formula = "fraction"
-brt_rt_var = "brt_rt_mean.dominant"
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=BOX_PRINT}
@@ -190,13 +182,11 @@ d <- d %>%
          rt_mean.incorrect.cost = rt_mean.incorrect.conjunction - rt_mean.incorrect.feature)
 ```
 
+
 ```{r ref.label="score_feedback_means", eval=BOX_PRINT}
 ```
 
 ```{r ref.label="qc_graphs", eval=(BOX_PRINT & QC_HIST_PRINT)}
-```
-
-```{r ref.label="residual_rt_graphs", eval=(BOX_PRINT & QC_HIST_PRINT)}
 ```
 
 ```{r ref.label="lms", eval=BOX_PRINT}
@@ -240,7 +230,6 @@ vars_of_interest_acc_long = list(c("Mean RT--congruent trials, correct press", "
                                  c("Mean cost of incongruence on RT--correct press", "Mean cost of incongruence on RT--incorrect press"))
 score_vars = c("rt_mean.congruent", "rt_mean.incongruent")
 score_formula = "fraction"
-brt_rt_var = "brt_rt_mean.overall"
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=FLANK_PRINT}
@@ -259,9 +248,6 @@ brt_rt_var = "brt_rt_mean.overall"
 ```
 
 ```{r ref.label="qc_graphs", eval=(FLANK_PRINT & QC_HIST_PRINT)}
-```
-
-```{r ref.label="residual_rt_graphs", eval=(FLANK_PRINT & QC_HIST_PRINT)}
 ```
 
 ```{r ref.label="lms", eval=FLANK_PRINT}
@@ -298,7 +284,6 @@ vars_of_interest_acc_long = list(c("Mean RT--sustained trials, correct press", "
                                  c("Mean RT--impulsive trials, correct press", "Mean RT--impulsive trials, incorrect press"))
 score_vars = vars_of_interest
 score_formula = NA
-brt_rt_var = "brt_rt_mean.overall"
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=SAAT_PRINT}
@@ -333,9 +318,6 @@ d <- d %>% # dumb snodgrassing
 ```
 
 ```{r ref.label="qc_graphs", eval=(SAAT_PRINT & QC_HIST_PRINT)}
-```
-
-```{r ref.label="residual_rt_graphs", eval=(SAAT_PRINT & QC_HIST_PRINT)}
 ```
 
 ```{r ref.label="lms", eval=SAAT_PRINT}
@@ -441,7 +423,6 @@ vars_of_interest_acc_long = list(c("Mean RT--congruent trials, correct press", "
                                  c("Mean cost of incongruence on RT--correct press", "Mean cost of incongruence on RT--incorrect press"))
 score_vars = c("rt_mean.congruent", "rt_mean.incongruent")
 score_formula = "fraction"
-brt_rt_var = "brt_rt_mean.overall"
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=STROOP_PRINT}
@@ -460,9 +441,6 @@ brt_rt_var = "brt_rt_mean.overall"
 ```
 
 ```{r ref.label="qc_graphs", eval=(STROOP_PRINT & QC_HIST_PRINT)}
-```
-
-```{r ref.label="residual_rt_graphs", eval=(STROOP_PRINT & QC_HIST_PRINT)}
 ```
 
 ```{r ref.label="lms", eval=STROOP_PRINT}
@@ -501,7 +479,6 @@ vars_of_interest_acc_long = list(c("Mean RT--stay trials, correct press", "Mean 
                                  c("Mean cost of switching on RT--correct press", "Mean cost of switching on RT--incorrect press"))
 score_vars = vars_of_interest 
 score_formula = NA
-brt_rt_var = "brt_rt_mean.overall"
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=SWITCH_PRINT}
@@ -520,9 +497,6 @@ brt_rt_var = "brt_rt_mean.overall"
 ```
 
 ```{r ref.label="qc_graphs", eval=(SWITCH_PRINT & QC_HIST_PRINT)}
-```
-
-```{r ref.label="residual_rt_graphs", eval=(SWITCH_PRINT & QC_HIST_PRINT)}
 ```
 
 ```{r ref.label="lms", eval=SWITCH_PRINT}
@@ -561,7 +535,6 @@ vars_of_interest_acc_long = list(c("Mean RT--tap only trials, correct press", "M
                                  c("Mean cost of dual task on RT--correct press", "Mean cost of dual task on RT--incorrect press"))
 score_vars = vars_of_interest
 score_formula = NA
-brt_rt_var = "brt_rt_mean.nondominant"
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=TNT_PRINT}
@@ -580,9 +553,6 @@ brt_rt_var = "brt_rt_mean.nondominant"
 ```
 
 ```{r ref.label="qc_graphs", eval=(TNT_PRINT & QC_HIST_PRINT)}
-```
-
-```{r ref.label="residual_rt_graphs", eval=(TNT_PRINT & QC_HIST_PRINT)}
 ```
 
 ```{r ref.label="lms", eval=TNT_PRINT}
@@ -604,7 +574,6 @@ vars_of_interest = c("k.2", "k.4")
 vars_of_interest_long = c("k = 2 targets * (Hit - FA)", "k = 4 targets * (Hit - FA)") # nice version for printing in graphs
 score_vars = vars_of_interest
 score_formula = NA
-brt_rt_var = "brt_rt_mean.dominant"
 ```
 
 ```{r ref.label="df_from_proc_demo", eval=FILTER_PRINT}
@@ -625,9 +594,6 @@ d <- d %>%
 ```{r ref.label="qc_graphs", eval=(FILTER_PRINT & QC_HIST_PRINT)}
 ```
 
-```{r ref.label="residual_rt_graphs", eval=(FILTER_PRINT & QC_HIST_PRINT)}
-```
-
 ```{r filter lms, eval=FILTER_PRINT}
 # this one has to be special because we're also regressing by distractor number which doesn't apply for other modules
 asis_output("##regressions")
@@ -635,13 +601,13 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender * distractors)))
+  with(summary(lm(get(vars_of_interest[1]) ~ age * gender * distractors)))
 
 cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[2], sep = "") %>%
   asis_output() # dumb: they have to be in two separate if statements to get the heading to render
 d %>%
-  with(summary(lm(get(vars_of_interest[2]) ~ grade * gender * distractors)))
+  with(summary(lm(get(vars_of_interest[2]) ~ age * gender * distractors)))
 ```
 
 ```{r filter graphs, eval=FILTER_PRINT}
@@ -652,35 +618,33 @@ paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 
 d_plot <- d %>%
-  group_by(grade_label, distractors) %>%
+  group_by(distractors) %>%
   summarize(k.2.mean = mean(k.2, na.rm = T),
             k.4.mean = mean(k.4, na.rm = T),
             k.2.se = sd(k.2, na.rm = T)/sqrt(length(!is.na(k.2))),
             k.4.se = sd(k.4, na.rm = T)/sqrt(!is.na(length(k.4))))
 
 d_plot %>%
-  ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[1], ".mean")), color = factor(grade_label))) +
+  ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[1], ".mean")))) +
   geom_point() +
   geom_line() +
   geom_errorbar(aes(ymin = get(paste0(vars_of_interest[1], ".mean")) - get(paste0(vars_of_interest[1], ".se")),
                     ymax = get(paste0(vars_of_interest[1], ".mean")) + get(paste0(vars_of_interest[1], ".se")),
                     width = 0.5)) +
-  labs(y = vars_of_interest_long[1]) +
-  guides(color = guide_legend(title = "Grade"))
+  labs(y = vars_of_interest_long[1])
 
 cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 
 d_plot %>%
-  ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[2], ".mean")), color = factor(grade_label))) +
+  ggplot(aes(x = distractors, y = get(paste0(vars_of_interest[2], ".mean")))) +
   geom_point() +
   geom_line() +
   geom_errorbar(aes(ymin = get(paste0(vars_of_interest[2], ".mean")) - get(paste0(vars_of_interest[2], ".se")),
                     ymax = get(paste0(vars_of_interest[2], ".mean")) + get(paste0(vars_of_interest[2], ".se")),
                     width = 0.5)) +
-  labs(y = vars_of_interest_long[2]) +
-  guides(color = guide_legend(title = "Grade"))
+  labs(y = vars_of_interest_long[2])
 ```
 
 ```{r filter resetting vars of interest to rt, eval=FILTER_PRINT}
