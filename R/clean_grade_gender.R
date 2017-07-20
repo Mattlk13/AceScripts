@@ -8,12 +8,16 @@ clean_grade_gender = function(df) {
            grade = grade - min(grade, na.rm = T), # center to the YOUNGEST grade = 0
            age = na_if(age, ""),
            age = na_if(age, "?"),
-           handedness = na_if(handedness, ""),
-           handedness = na_if(handedness, "?"),
            gender = na_if(gender, ""),
            gender = na_if(gender, "?"),
            gender = as.factor(gender)) %>%
     within({
       contrasts(gender) = c(-1, 1) # females, then males (expect females to be FASTER)
     })
+  if ("handedness" %in% names(df)) {
+    df = df %>%
+      mutate(handedness = na_if(handedness, ""),
+             handedness = na_if(handedness, "?"))
+  }
+  return (df)
 }
