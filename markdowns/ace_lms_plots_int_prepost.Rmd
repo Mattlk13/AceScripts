@@ -34,11 +34,11 @@ BOX_PRINT = T
 FLANK_PRINT = T
 SAAT_PRINT = T
 SPAN_PRINT = T
-BSPAN_PRINT = F
+BSPAN_PRINT = T
 STROOP_PRINT = T
 SWITCH_PRINT = T
 TNT_PRINT = T
-FILTER_PRINT = F
+FILTER_PRINT = T
 
 # Please set these to TRUE or FALSE depending on whether you would like outlier checking info or quality control histograms printed for ALL modules or not. Even if these are set to TRUE, they will not print for modules which have been turned off (set as FALSE) in the above block.
 OUTLIER_PRINT = TRUE
@@ -66,7 +66,6 @@ prefixes = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk")
 schools = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin")
 ```
 
-
 ```{r setting vars for BRT READ ME}
 this_task = "BRT"
 this_task_long = "BRT"
@@ -81,19 +80,20 @@ grab_module <- function(proc_demo, this_task) {
   d_raw <- proc_demo[[this_task]]
   d_raw <- d_raw[grep(paste0(prefixes, collapse = "|"), d_raw$pid),] # only including data from real Ss (with school-specific ID prefixes)
   d_raw = d_raw %>% filter(time != "0", time != "TIME:", !is.na(grade))
+  d_raw$grade[d_raw$pid == "ADMIN-UCSF-la059"] = 5 # patching this one rando who was mis-labeled
   return (d_raw)
 }
 
 if(this_task == "BRT" & !BRT_PRINT) {} else { # edge case where BRT needs to be evaluated even if no print (and thus header turned off)
   paste0("#", this_task_long) %>%
     asis_output()}
-cat("\n") %>% asis_output() # need this for line breaking
+asis_output(cat("\n")) # need this for line breaking
 
 d_pre_raw <- grab_module(proc_pre, this_task)
 d_post_raw <- grab_module(proc_post, this_task)
 ```
 
-```{r brt pre outliers}
+```{r define find_outliers}
 find_outliers <- function(d_raw, vars) {
   bad_subs = vector("list", length(unique(d_raw$grade)))
   
@@ -112,19 +112,54 @@ find_outliers <- function(d_raw, vars) {
   }
   return (unlist(bad_subs))
 }
-
-bad_subs = find_outliers(d_raw, outlier_vars)
-d_pre <- d_pre_raw %>%
-  filter(!(pid %in% bad_subs))
-```
-
-```{r caching brt pre for appending to subsequent modules}
-brt_pre <- d_pre
 ```
 
 ```{r brt preproc}
-d <- d %>%
+d_pre <- d_pre_raw %>%
+  filter(!(pid %in% find_outliers(d_pre_raw, vars_of_interest))) %>%
   clean_grade_gender()
+
+if ("handedness" %in% names(d_pre)) {
+  d_pre <- d_pre %>%
+    mutate(rt_mean.dominant = if_else(handedness == "R", rt_mean.right, rt_mean.left, NA_real_),
+           rt_mean.nondominant = if_else(handedness == "L", rt_mean.right, rt_mean.left, NA_real_),
+           acc_mean.dominant = if_else(handedness == "R", acc_mean.right, acc_mean.left, NA_real_),
+           acc_mean.nondominant = if_else(handedness == "L", acc_mean.right, acc_mean.left, NA_real_))
+} else { # if handedness not provided, assume all R handed (for purposes of actually running analysis)
+  d_pre <- d_pre %>%
+    mutate(rt_mean.dominant = rt_mean.right,
+           rt_mean.nondominant = rt_mean.left,
+           acc_mean.dominant = acc_mean.right,
+           acc_mean.nondominant = acc_mean.left)
+}
+
+d_post <- d_post_raw %>%
+  filter(!(pid %in% find_outliers(d_post_raw, vars_of_interest))) %>%
+  clean_grade_gender()
+
+if ("handedness" %in% names(d_post)) {
+  d_post <- d_post %>%
+    mutate(rt_mean.dominant = if_else(handedness == "R", rt_mean.right, rt_mean.left, NA_real_),
+           rt_mean.nondominant = if_else(handedness == "L", rt_mean.right, rt_mean.left, NA_real_),
+           acc_mean.dominant = if_else(handedness == "R", acc_mean.right, acc_mean.left, NA_real_),
+           acc_mean.nondominant = if_else(handedness == "L", acc_mean.right, acc_mean.left, NA_real_))
+} else { # if handedness not provided, assume all R handed (for purposes of actually running analysis)
+  d_post <- d_post %>%
+    mutate(rt_mean.dominant = rt_mean.right,
+           rt_mean.nondominant = rt_mean.left,
+           acc_mean.dominant = acc_mean.right,
+           acc_mean.nondominant = acc_mean.left)
+}
+
+brt_pre <- d_pre
+brt_post <- d_post
+
+# here, init a list to hold all the cleaned data to be used for across-task stuff later
+clean_pre = vector("list")
+clean_post = vector("list")
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
 ```
 
 
@@ -177,7 +212,7 @@ d_pre %>%
   labs(x = vars_of_interest_long[1]) +
   guides(fill = guide_legend(title = "Grade"))
 
-cat("\n") %>% asis_output()
+asis_output(cat("\n"))
 if(!invalid(vars_of_interest[2])) {
   paste("####", vars_of_interest_long[2], sep = "") %>%
     asis_output()}
@@ -196,22 +231,13 @@ paste("####", vars_of_interest_long[1], sep = "") %>%
 d_pre %>%
   with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
 
-cat("\n") %>% asis_output()
+asis_output(cat("\n"))
 if(!invalid(vars_of_interest[2])) {
   paste("####", vars_of_interest_long[2], sep = "") %>%
     asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
 if(!invalid(vars_of_interest[2])) {
   d_pre %>%
     with(summary(lm(get(vars_of_interest[2]) ~ grade * gender)))}
-```
-
-```{r brt post outliers n preproc}
-d_post <- remove_outlier_subs(d_post_raw, vars_of_interest) %>%
-  clean_grade_gender()
-```
-
-```{r caching brt post for appending to subsequent modules}
-brt_post <- d_post
 ```
 
 ```{r score feedback brt post, eval=BRT_PRINT}
@@ -232,7 +258,7 @@ d_post %>%
   labs(x = vars_of_interest_long[1]) +
   guides(fill = guide_legend(title = "Grade"))
 
-cat("\n") %>% asis_output()
+asis_output(cat("\n"))
 if(!invalid(vars_of_interest[2])) {
   paste("####", vars_of_interest_long[2], sep = "") %>%
     asis_output()}
@@ -251,7 +277,7 @@ paste("####", vars_of_interest_long[1], sep = "") %>%
 d_post %>%
   with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
 
-cat("\n") %>% asis_output()
+asis_output(cat("\n"))
 if(!invalid(vars_of_interest[2])) {
   paste("####", vars_of_interest_long[2], sep = "") %>%
     asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
@@ -263,21 +289,27 @@ if(!invalid(vars_of_interest[2])) {
 ```{r brt preproc pre vs post, eval=BRT_PRINT}
 preproc_pre_v_post <- function(d_pre, d_post, vars_of_interest) {
   d_pre <- d_pre %>%
-    select(pid, grade:gender, grade_label, one_of(vars_of_interest)) %>%
-    group_by(pid, grade, gender, grade_label) %>% summarize_at(one_of(vars_of_interest), mean, na.rm = T) %>%
-    ungroup()
+    select(pid, grade, gender, grade_label, one_of(vars_of_interest))
+  # group_by(pid, grade, gender, grade_label) %>% I think this was here when there were duplicate PIDs? shitty workaround then too lol
+  # summarize_at(one_of(vars_of_interest), mean, na.rm = T) %>%
+  # ungroup()
+  
   d_post <- d_post %>%
-    select(pid, grade:gender, grade_label, one_of(vars_of_interest)) %>%
-    group_by(pid, grade, gender, grade_label) %>% summarize_at(one_of(vars_of_interest), mean, na.rm = T) %>%
-    ungroup()
+    select(pid, grade, gender, grade_label, one_of(vars_of_interest))
+  #  group_by(pid, grade, gender, grade_label) %>%
+  #  summarize_at(one_of(vars_of_interest), mean, na.rm = T) %>%
+  #  ungroup()
+  
   d_all <- d_pre %>%
     inner_join(d_post, by = c("pid", "grade", "grade_label", "gender"), suffix = c("-pre", "-post"))
   d_all <- mutate_(d_all,
                    var1_diff = interp(~(b - a), a = as.name(paste0(vars_of_interest[1], "-post")), b = as.name(paste0(vars_of_interest[1], "-pre"))))
+  
   if(!invalid(vars_of_interest[2])) {
     d_all <- mutate_(d_all,
                      var2_diff = interp(~(b - a), a = as.name(paste0(vars_of_interest[2], "-post")), b = as.name(paste0(vars_of_interest[2], "-pre"))))
   }
+  
   if(!invalid(vars_of_interest[3])) {
     d_all <- mutate_(d_all,
                      var3_diff = interp(~(b - a), a = as.name(paste0(vars_of_interest[3], "-post")), b = as.name(paste0(vars_of_interest[3], "-pre"))))
@@ -295,7 +327,7 @@ paste("####", vars_of_interest_long[1], sep = "") %>%
 d_all %>%
   with(summary(lm(var1_diff ~ grade * gender)))
 
-cat("\n") %>% asis_output()
+asis_output(cat("\n"))
 if(!invalid(vars_of_interest[2])) {
   paste("####", vars_of_interest_long[2], sep = "") %>%
     asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
@@ -310,6 +342,7 @@ paste("####", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 
 make_long_pvp <- function(d_all) {
+  d_all = d_all[!(duplicated(d_all$pid) | duplicated(d_all$pid, fromLast = T)), ]
   d_long <- d_all %>%
     select(-starts_with("var")) %>%
     gather(pre_or_post, value, -c(pid:grade_label)) %>%
@@ -328,7 +361,7 @@ d_long %>%
   labs(y = vars_of_interest_long[1]) +
   guides(fill = guide_legend(title = "Gender"))
 
-cat("\n") %>% asis_output()
+asis_output(cat("\n"))
 paste("####", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 d_long %>%
@@ -350,14 +383,23 @@ score_formula = "fraction"
 
 ```{r boxed load, eval = BOX_PRINT}
 paste0("#", this_task_long) %>% asis_output()
-cat("\n") %>% asis_output() # need this for line breaking
+asis_output(cat("\n")) # need this for line breaking
 
-d_pre_raw <- proc_pre[[this_task]]
-d_post_raw <- proc_post[[this_task]]
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
 
-d_pre = remove_outlier_subs(d_pre_raw, vars_of_interest) %>%
+d_pre <- d_pre_raw %>%
+  filter(!(pid %in% find_outliers(d_pre_raw, vars_of_interest))) %>%
   brt_append(brt_pre) %>%
   clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  filter(!(pid %in% find_outliers(d_post_raw, vars_of_interest))) %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
 ```
 
 ```{r score feedback boxed pre, eval=BOX_PRINT}
@@ -385,12 +427,6 @@ paste("####", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d_pre %>%
   with(summary(lm(get(vars_of_interest[1]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
-```
-
-```{r boxed post outliers, eval = BOX_PRINT}
-d_post <- remove_outlier_subs(d_post_raw, vars_of_interest) %>%
-  brt_append(brt_post) %>%
-  clean_grade_gender()
 ```
 
 ```{r score feedback boxed post, eval=BOX_PRINT}
@@ -459,14 +495,23 @@ score_formula = "fraction"
 
 ```{r flanker load, eval = FLANK_PRINT}
 paste0("#", this_task_long) %>% asis_output()
-cat("\n") %>% asis_output() # need this for line breaking
+asis_output(cat("\n")) # need this for line breaking
 
-d_pre_raw <- proc_pre[[this_task]]
-d_post_raw <- proc_post[[this_task]]
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
 
-d_pre = remove_outlier_subs(d_pre_raw, vars_of_interest) %>%
+d_pre <- d_pre_raw %>%
+  filter(!(pid %in% find_outliers(d_pre_raw, vars_of_interest))) %>%
   brt_append(brt_pre) %>%
   clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  filter(!(pid %in% find_outliers(d_post_raw, vars_of_interest))) %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
 ```
 
 ```{r score feedback flanker pre, eval=FLANK_PRINT}
@@ -519,12 +564,6 @@ paste("####", vars_of_interest_long[3], sep = "") %>%
   asis_output()
 d_pre %>%
   with(summary(lm(get(vars_of_interest[3]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
-```
-
-```{r flanker post outliers, eval = FLANK_PRINT}
-d_post <- remove_outlier_subs(d_post_raw, vars_of_interest) %>%
-  brt_append(brt_post) %>%
-  clean_grade_gender()
 ```
 
 ```{r score feedback flanker post, eval=FLANK_PRINT}
@@ -647,14 +686,23 @@ score_formula = NA
 
 ```{r saat load, eval = SAAT_PRINT}
 paste0("#", this_task_long) %>% asis_output()
-cat("\n") %>% asis_output() # need this for line breaking
+asis_output(cat("\n")) # need this for line breaking
 
-d_pre_raw <- proc_pre[[this_task]]
-d_post_raw <- proc_post[[this_task]]
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
 
-d_pre = remove_outlier_subs(d_pre_raw, vars_of_interest) %>%
+d_pre <- d_pre_raw %>%
+  filter(!(pid %in% find_outliers(d_pre_raw, vars_of_interest))) %>%
   brt_append(brt_pre) %>%
   clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  filter(!(pid %in% find_outliers(d_post_raw, vars_of_interest))) %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
 ```
 
 ```{r score feedback saat pre, eval=SAAT_PRINT}
@@ -695,12 +743,6 @@ paste("####", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 d_pre %>%
   with(summary(lm(get(vars_of_interest[2]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
-```
-
-```{r saat post outliers, eval = SAAT_PRINT}
-d_post <- remove_outlier_subs(d_post_raw, vars_of_interest) %>%
-  brt_append(brt_post) %>%
-  clean_grade_gender()
 ```
 
 ```{r score feedback saat post, eval=SAAT_PRINT}
@@ -798,13 +840,21 @@ score_formula = NA
 
 ```{r spatial span load, eval = SPAN_PRINT}
 paste0("#", this_task_long) %>% asis_output()
-cat("\n") %>% asis_output() # need this for line breaking
+asis_output(cat("\n")) # need this for line breaking
 
-d_pre_raw <- proc_pre[[this_task]]
-d_post_raw <- proc_post[[this_task]]
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
 
-d_pre = brt_append(d_pre_raw, brt_pre, ext_demo_data = F) %>%
+d_pre <- d_pre_raw %>%
+  brt_append(brt_pre, ext_demo_data = F) %>%
   clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
 ```
 
 ```{r score feedback spatial span pre, eval=SPAN_PRINT}
@@ -832,12 +882,6 @@ paste("####", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d_pre %>%
   with(summary(lm(get(vars_of_interest[1]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
-```
-
-```{r spatial span post outliers, eval = SPAN_PRINT}
-d_post <- d_post_raw %>%
-  brt_append(brt_post) %>%
-  clean_grade_gender()
 ```
 
 ```{r score feedback spatial span post, eval=SPAN_PRINT}
@@ -906,6 +950,107 @@ score_vars = vars_of_interest
 score_formula = NA
 ```
 
+```{r backward spatial span load, eval = BSPAN_PRINT}
+paste0("#", this_task_long) %>% asis_output()
+asis_output(cat("\n")) # need this for line breaking
+
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
+
+d_pre <- d_pre_raw %>%
+  brt_append(brt_pre, ext_demo_data = F) %>%
+  clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
+```
+
+```{r score feedback backward spatial span pre, eval=BSPAN_PRINT}
+asis_output("##Pre\n")
+asis_output("###mean scores for giving feedback in task\n")
+
+d_score = calc_scores(d_pre, score_vars, score_formula)
+print(d_score)
+```
+
+```{r qc graphs backward spatial span pre, eval=(BSPAN_PRINT & QC_HIST_PRINT)}
+asis_output("###quality control histograms\n")
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d_pre %>%
+  ggplot(aes(x = get(vars_of_interest[1]), fill = factor(grade_label))) +
+  geom_histogram(bins=20, position="dodge") +
+  labs(x = vars_of_interest_long[1]) +
+  guides(fill = guide_legend(title = "Grade"))
+```
+
+```{r lms backward spatial span pre, eval=BSPAN_PRINT}
+asis_output("###regressions\n")
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d_pre %>%
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
+```
+
+```{r score feedback backward spatial span post, eval=BSPAN_PRINT}
+asis_output("##Post\n")
+asis_output("###mean scores for giving feedback in task\n")
+
+d_score = calc_scores(d_post, score_vars, score_formula = NA)
+print(d_score)
+```
+
+```{r qc graphs backward spatial span post, eval=(BSPAN_PRINT & QC_HIST_PRINT)}
+asis_output("###quality control histograms\n")
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d_post %>%
+  ggplot(aes(x = get(vars_of_interest[1]), fill = factor(grade_label))) +
+  geom_histogram(bins=20, position="dodge") +
+  labs(x = vars_of_interest_long[1]) +
+  guides(fill = guide_legend(title = "Grade"))
+```
+
+```{r lms backward spatial span post, eval=BSPAN_PRINT}
+asis_output("###regressions\n")
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d_post %>%
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
+```
+
+```{r backward spatial span preproc pre vs post, eval=BSPAN_PRINT}
+d_all = preproc_pre_v_post(d_pre, d_post, vars_of_interest)
+```
+
+```{r backward spatial span lms pre vs post, eval=BSPAN_PRINT}
+asis_output("##Pre vs. post\n")
+asis_output("###regressions\n")
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d_all %>%
+  with(summary(lm(var1_diff ~ grade * gender)))
+```
+
+```{r backward spatial span graphs pre vs post, eval=BSPAN_PRINT}
+asis_output("###graphs\n")
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+
+d_long = make_long_pvp(d_all)
+
+d_long %>%
+  ggplot(aes(x = grade_label, y = count_span.overall, fill = factor(gender))) +
+  geom_boxplot() +
+  facet_grid(~ pre_or_post) +
+  labs(y = vars_of_interest_long[1]) +
+  guides(fill = guide_legend(title = "Gender"))
+```
+
 ```{r setting vars for stroop READ ME}
 this_task = "STROOP"
 this_task_long = "Stroop task"
@@ -918,14 +1063,23 @@ score_formula = "fraction"
 
 ```{r stroop load, eval = STROOP_PRINT}
 paste0("#", this_task_long) %>% asis_output()
-cat("\n") %>% asis_output() # need this for line breaking
+asis_output(cat("\n")) # need this for line breaking
 
-d_pre_raw <- proc_pre[[this_task]]
-d_post_raw <- proc_post[[this_task]]
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
 
-d_pre = remove_outlier_subs(d_pre_raw, vars_of_interest) %>%
+d_pre <- d_pre_raw %>%
+  filter(!(pid %in% find_outliers(d_pre_raw, vars_of_interest))) %>%
   brt_append(brt_pre) %>%
   clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  filter(!(pid %in% find_outliers(d_post_raw, vars_of_interest))) %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
 ```
 
 ```{r score feedback stroop pre, eval=STROOP_PRINT}
@@ -978,12 +1132,6 @@ paste("####", vars_of_interest_long[3], sep = "") %>%
   asis_output()
 d_pre %>%
   with(summary(lm(get(vars_of_interest[3]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
-```
-
-```{r stroop post outliers, eval = STROOP_PRINT}
-d_post <- remove_outlier_subs(d_post_raw, vars_of_interest) %>%
-  brt_append(brt_post) %>%
-  clean_grade_gender()
 ```
 
 ```{r score feedback stroop post, eval=STROOP_PRINT}
@@ -1107,14 +1255,23 @@ score_formula = NA
 
 ```{r task switch load, eval = SWITCH_PRINT}
 paste0("#", this_task_long) %>% asis_output()
-cat("\n") %>% asis_output() # need this for line breaking
+asis_output(cat("\n")) # need this for line breaking
 
-d_pre_raw <- proc_pre[[this_task]]
-d_post_raw <- proc_post[[this_task]]
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
 
-d_pre = remove_outlier_subs(d_pre_raw, vars_of_interest) %>%
+d_pre <- d_pre_raw %>%
+  filter(!(pid %in% find_outliers(d_pre_raw, vars_of_interest))) %>%
   brt_append(brt_pre) %>%
   clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  filter(!(pid %in% find_outliers(d_post_raw, vars_of_interest))) %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
 ```
 
 ```{r score feedback task switch pre, eval=SWITCH_PRINT}
@@ -1155,12 +1312,6 @@ paste("####", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 d_pre %>%
   with(summary(lm(get(vars_of_interest[2]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
-```
-
-```{r task switch post outliers, eval = SWITCH_PRINT}
-d_post <- remove_outlier_subs(d_post_raw, vars_of_interest) %>%
-  brt_append(brt_post) %>%
-  clean_grade_gender()
 ```
 
 ```{r score feedback task switch post, eval=SWITCH_PRINT}
@@ -1256,14 +1407,23 @@ score_formula = NA
 
 ```{r tap n trace load, eval = TNT_PRINT}
 paste0("#", this_task_long) %>% asis_output()
-cat("\n") %>% asis_output() # need this for line breaking
+asis_output(cat("\n")) # need this for line breaking
 
-d_pre_raw <- proc_pre[[this_task]]
-d_post_raw <- proc_post[[this_task]]
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
 
-d_pre = remove_outlier_subs(d_pre_raw, vars_of_interest) %>%
+d_pre <- d_pre_raw %>%
+  filter(!(pid %in% find_outliers(d_pre_raw, vars_of_interest))) %>%
   brt_append(brt_pre) %>%
   clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  filter(!(pid %in% find_outliers(d_post_raw, vars_of_interest))) %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
 ```
 
 ```{r score feedback tap n trace pre, eval=TNT_PRINT}
@@ -1304,12 +1464,6 @@ paste("####", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 d_pre %>%
   with(summary(lm(get(vars_of_interest[2]) ~ grade * gender + scale(brt_rt_mean.overall, scale = Z_SCORE_XREGS))))
-```
-
-```{r tap n trace post outliers, eval = TNT_PRINT}
-d_post <- remove_outlier_subs(d_post_raw, vars_of_interest) %>%
-  brt_append(brt_post) %>%
-  clean_grade_gender()
 ```
 
 ```{r score feedback tap n trace post, eval=TNT_PRINT}
@@ -1403,3 +1557,650 @@ vars_of_interest_long = c("k = 2 targets * (Hit - FA)", "k = 4 targets * (Hit - 
 score_vars = vars_of_interest
 score_formula = NA
 ```
+
+```{r filter load, eval = FILTER_PRINT}
+paste0("#", this_task_long) %>% asis_output()
+asis_output(cat("\n")) # need this for line breaking
+
+d_pre_raw <- grab_module(proc_pre, this_task)
+d_post_raw <- grab_module(proc_post, this_task)
+
+d_pre <- d_pre_raw %>%
+  brt_append(brt_pre) %>%
+  clean_grade_gender()
+
+d_post <- d_post_raw %>%
+  brt_append(brt_post) %>%
+  clean_grade_gender()
+
+clean_pre[[this_task]] <- d_pre
+clean_post[[this_task]] <- d_post
+```
+
+```{r score feedback filter pre, eval=FILTER_PRINT}
+asis_output("##Pre\n")
+asis_output("###mean scores for giving feedback in task\n")
+
+d_score = calc_scores(d_pre, score_vars, score_formula)
+print(d_score)
+```
+
+```{r lms filter pre, eval=FILTER_PRINT}
+asis_output("###regressions\n")
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d_pre %>%
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender * distractors)))
+
+paste("####", vars_of_interest_long[2], sep = "") %>%
+  asis_output()
+d_pre %>%
+  with(summary(lm(get(vars_of_interest[2]) ~ grade * gender * distractors)))
+```
+
+```{r score feedback filter post, eval=FILTER_PRINT}
+asis_output("##Post\n")
+asis_output("###mean scores for giving feedback in task\n")
+
+d_score = calc_scores(d_post, score_vars, score_formula)
+print(d_score)
+```
+
+```{r lms filter post, eval=FILTER_PRINT}
+asis_output("###regressions\n")
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+d_post %>%
+  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender * distractors)))
+
+paste("####", vars_of_interest_long[2], sep = "") %>%
+  asis_output()
+d_post %>%
+  with(summary(lm(get(vars_of_interest[2]) ~ grade * gender * distractors)))
+```
+
+```{r filter preproc pre vs post, eval=FILTER_PRINT}
+# this one's different than the usual function because we need to retain the within-subj distractor number variable
+d_pre <- d_pre %>%
+  select(pid, grade, gender, grade_label, distractors, one_of(vars_of_interest))
+
+d_post <- d_post %>%
+  select(pid, grade, gender, grade_label, distractors, one_of(vars_of_interest))
+
+
+d_all <- d_pre %>%
+  inner_join(d_post, by = c("pid", "grade", "grade_label", "gender", "distractors"), suffix = c("-pre", "-post")) %>%
+  mutate_(var1_diff = interp(~(b - a), a = as.name(paste0(vars_of_interest[1], "-post")), b = as.name(paste0(vars_of_interest[1], "-pre"))),
+          var2_diff = interp(~(b - a), a = as.name(paste0(vars_of_interest[2], "-post")), b = as.name(paste0(vars_of_interest[2], "-pre"))))
+```
+
+```{r filter lms pre vs post, eval=FILTER_PRINT}
+asis_output("##Pre vs. post\n")
+asis_output("###regressions\n")
+asis_output(cat("####", vars_of_interest_long[1], "\n"))
+d_all %>%
+  with(summary(lm(var1_diff ~ grade * gender * distractors)))
+
+asis_output(cat("####", vars_of_interest_long[2], "\n"))
+d_all %>%
+  with(summary(lm(var2_diff ~ grade * gender * distractors)))
+```
+
+```{r filter graphs pre vs post, eval=FILTER_PRINT}
+asis_output("###graphs\n")
+
+d_all = d_all[!(duplicated(select(d_all, pid:distractors)) | duplicated(select(d_all, pid:distractors), fromLast = T)), ]
+
+d_long <- d_all %>%
+  select(-starts_with("var")) %>%
+  gather(pre_or_post, value, -c(pid:distractors)) %>%
+  extract(pre_or_post, c("var_name", "pre_or_post"), "([[:alnum:]]+.[[:alnum:]]+)-([[:alnum:]]+)") %>%
+  spread(var_name, value) %>%
+  mutate(pre_or_post = factor(pre_or_post, levels = c("pre", "post")))
+
+paste("####", vars_of_interest_long[1], sep = "") %>%
+  asis_output()
+
+d_long %>%
+  ggplot(aes(x = grade_label, y = k.2, fill = factor(gender))) +
+  geom_boxplot() +
+  facet_grid(distractors ~ pre_or_post) +
+  labs(y = vars_of_interest_long[1]) +
+  guides(fill = guide_legend(title = "Gender"))
+
+paste("####", vars_of_interest_long[2], sep = "") %>%
+  asis_output()
+
+d_long %>%
+  ggplot(aes(x = grade_label, y = k.4, fill = factor(gender))) +
+  geom_boxplot() +
+  facet_grid(distractors ~ pre_or_post) +
+  labs(y = vars_of_interest_long[2]) +
+  guides(fill = guide_legend(title = "Gender"))
+```
+
+#Composite score percentiles
+```{r aggregating scores in composites}
+
+# WM composite: forward and backward spatial span count, filter k when 0 distractors
+# filtering composite: filter k0dist, flanker cost, stroop cost
+# focus composite: boxed cost, saat-sustained
+# impulsivity: saat impulsivity
+# goal mgmt composite: TNT cost, task switch cost
+get_percentile <- function(df, module, id_var = "pid", group_var = "grade", var) { # assumes there is an identifier column (pid)
+  df = df[!(duplicated(df$pid) | duplicated(df$pid, fromLast = T)), ] # scrubbing ALL datasets where there is more than one record per PID (keeping NEITHER) since can't be sure which is right
+  df <- df %>%
+    dplyr::select_(id_var, group_var, var) %>%
+    dplyr::group_by_(group_var) %>%
+    dplyr::arrange_(group_var, var) %>%
+    dplyr::mutate(inv_rank = c(1:n()) - 1, # so that the lowest one gets a rank of 0, n() is a dplyr helper function
+                  percentile = (inv_rank / n()) * 100) %>%
+    dplyr::select(-inv_rank)
+  names(df)[4] = paste0(module, ".", var, ".", "percentile")
+  return(df)}
+
+get_composite_bits <- function(clean) {
+  composites = clean[["BRT"]] %>%
+    select(bid, pid, age, grade, grade_label, gender, time, file) %>%
+    left_join(get_percentile(clean[["BACKWARDSSPATIALSPAN"]], module = "BACKWARDSSPATIALSPAN", var = "object_count_span.overall"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["SPATIALSPAN"]], module = "SPATIALSPAN", var = "object_count_span.overall"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["FILTER"]], module = "FILTER", var = "k.2"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["FLANKER"]], module = "FLANKER", var = "rt_mean.cost"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["STROOP"]], module = "STROOP", var = "rt_mean.cost"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["BOXED"]], module = "BOXED", var = "score"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["SAAT"]], module = "SAAT", var = "rt_mean.sustained"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["SAAT"]], module = "SAAT", var = "rt_mean.impulsive"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["TNT"]], module = "TNT", var = "rt_mean.cost"), by = c("pid" = "pid", "grade" = "grade")) %>%
+    left_join(get_percentile(clean[["TASKSWITCH"]], module = "TASKSWITCH", var = "rt_mean.cost"), by = c("pid" = "pid", "grade" = "grade"))
+  return(composites)
+}
+
+calc_composites <- function(composites) {
+  composites = composites %>%
+    mutate(wm = (SPATIALSPAN.object_count_span.overall.percentile + BACKWARDSSPATIALSPAN.object_count_span.overall.percentile + FILTER.k.2.percentile) / 3,
+           filtering = (FILTER.k.2.percentile + FLANKER.rt_mean.cost.percentile + STROOP.rt_mean.cost.percentile) / 3,
+           focus = (BOXED.score.percentile + SAAT.rt_mean.sustained.percentile) / 2,
+           impulsivity = SAAT.rt_mean.impulsive.percentile,
+           goal_mgmt = (TNT.rt_mean.cost.percentile + TASKSWITCH.rt_mean.cost.percentile) /2,
+           school_abbrev = substr(pid, 12, 13),
+           school = mapvalues(school_abbrev, from = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"),
+                              to = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin")))
+  return(composites)
+}
+
+clean_post$FILTER = clean_post$FILTER %>%
+  filter(distractors == 0)
+
+clean_post$BOXED = clean_post$BOXED %>%
+  mutate(score = (((rt_mean.conjunction_12 - rt_mean.conjunction_4) / rt_mean.conjunction_4) * 100) + 100)
+
+clean_post$COMPOSITES = get_composite_bits(clean_post)
+clean_post$COMPOSITES$grade_label[clean_post$COMPOSITES$pid == "ADMIN-UCSF-la059"] = "Grade 5" # this one was mislabeled as 7th grade for whatever reason apparently
+
+clean_post$COMPOSITES = calc_composites(clean_post$COMPOSITES)
+
+composites_summary_post = clean_post$COMPOSITES %>%
+  group_by(school, school_abbrev, grade_label) %>%
+  summarize(mean_wm_percentile = mean(wm, na.rm  = T),
+            mean_filtering_percentile = mean(filtering, na.rm = T),
+            mean_focus_percentile = mean(focus, na.rm = T),
+            mean_impulsivity_percentile = mean(impulsivity, na.rm = T),
+            mean_goal_mgmt_percentile = mean(goal_mgmt, na.rm = T))
+
+clean_pre$FILTER = clean_pre$FILTER %>%
+  filter(distractors == 0)
+
+clean_pre$BOXED = clean_pre$BOXED %>%
+  mutate(score = (((rt_mean.conjunction_12 - rt_mean.conjunction_4) / rt_mean.conjunction_4) * 100) + 100)
+
+clean_pre$COMPOSITES = get_composite_bits(clean_pre)
+clean_pre$COMPOSITES$grade_label[clean_pre$COMPOSITES$pid == "ADMIN-UCSF-la059"] = "Grade 5" # this one was mislabeled as 7th grade for whatever reason apparently
+
+clean_pre$COMPOSITES = calc_composites(clean_pre$COMPOSITES)
+
+composites_summary_pre = clean_pre$COMPOSITES %>%
+  group_by(school, school_abbrev, grade_label) %>%
+  summarize(mean_wm_percentile = mean(wm, na.rm  = T),
+            mean_filtering_percentile = mean(filtering, na.rm = T),
+            mean_focus_percentile = mean(focus, na.rm = T),
+            mean_impulsivity_percentile = mean(impulsivity, na.rm = T),
+            mean_goal_mgmt_percentile = mean(goal_mgmt, na.rm = T))
+
+composites_s17_f16_delta = clean_pre$COMPOSITES %>%
+  select(pid, age, grade_label, gender, school, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  left_join(select(clean_post$COMPOSITES, pid, age, grade_label, gender, school, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt), by = c("pid" = "pid", "age" = "age", "grade_label" = "grade_label", "gender" = "gender", "school" = "school", "school_abbrev" = "school_abbrev"), suffix = c(".f16", ".s17")) %>%
+  mutate(wm = wm.s17 - wm.f16,
+         filtering = filtering.s17 - filtering.f16,
+         focus = focus.s17 - focus.f16,
+         impulsivity = impulsivity.s17 - impulsivity.f16,
+         goal_mgmt = goal_mgmt.s17 - goal_mgmt.f16)
+
+# these are SUBTRACTING the fall 2016 percentile from the spring 2017 percentile, thus giving the CHANGE in percentile rank, having calculated the percentiles separately for the two timepoints.
+composites_summary_s17_f16_delta = composites_s17_f16_delta %>%
+  group_by(school, school_abbrev, grade_label) %>%
+  summarize(mean_wm_percentile = mean(wm, na.rm  = T),
+            mean_filtering_percentile = mean(filtering, na.rm = T),
+            mean_focus_percentile = mean(focus, na.rm = T),
+            mean_impulsivity_percentile = mean(impulsivity, na.rm = T),
+            mean_goal_mgmt_percentile = mean(goal_mgmt, na.rm = T))
+
+# for graphing: gather composites_summary_s17_f16_delta and then summarize to get pre and post means for graphing
+composites_s17_f16_long = composites_s17_f16_delta %>%
+  select(-wm, -filtering, -focus, -impulsivity, -goal_mgmt) %>% # don't need the deltas
+  gather(metric_full, score, wm.f16:goal_mgmt.s17) %>%
+  separate(metric_full, into = c("metric", "time"), sep = -5, extra = "merge") %>%
+  mutate(time = substr(time, 2, 4)) %>%
+  spread(metric, score) %>%
+  group_by(school, grade_label, time) %>%
+  summarize(mean_wm_percentile = mean(wm, na.rm  = T),
+            mean_filtering_percentile = mean(filtering, na.rm = T),
+            mean_focus_percentile = mean(focus, na.rm = T),
+            mean_impulsivity_percentile = mean(impulsivity, na.rm = T),
+            mean_goal_mgmt_percentile = mean(goal_mgmt, na.rm = T),
+            se_wm_percentile = sd(wm, na.rm = T)/sqrt(n()),
+            se_filtering_percentile = sd(filtering, na.rm = T)/sqrt(n()),
+            se_focus_percentile = sd(focus, na.rm = T)/sqrt(n()),
+            se_impulsivity_percentile = sd(impulsivity, na.rm = T)/sqrt(n()),
+            se_goal_mgmt_percentile = sd(goal_mgmt, na.rm = T)/sqrt(n()))
+
+composites_s17_f16_grade_long = composites_s17_f16_delta %>%
+  select(-wm, -filtering, -focus, -impulsivity, -goal_mgmt) %>% # don't need the deltas
+  gather(metric_full, score, wm.f16:goal_mgmt.s17) %>%
+  separate(metric_full, into = c("metric", "time"), sep = -5, extra = "merge") %>%
+  mutate(time = substr(time, 2, 4)) %>%
+  spread(metric, score) %>%
+  group_by(grade_label, time) %>%
+  summarize(mean_wm_percentile = mean(wm, na.rm  = T),
+            mean_filtering_percentile = mean(filtering, na.rm = T),
+            mean_focus_percentile = mean(focus, na.rm = T),
+            mean_impulsivity_percentile = mean(impulsivity, na.rm = T),
+            mean_goal_mgmt_percentile = mean(goal_mgmt, na.rm = T),
+            se_wm_percentile = sd(wm, na.rm = T)/sqrt(n()),
+            se_filtering_percentile = sd(filtering, na.rm = T)/sqrt(n()),
+            se_focus_percentile = sd(focus, na.rm = T)/sqrt(n()),
+            se_impulsivity_percentile = sd(impulsivity, na.rm = T)/sqrt(n()),
+            se_goal_mgmt_percentile = sd(goal_mgmt, na.rm = T)/sqrt(n()))
+```
+
+##Fall 2016 composite percentile scores
+###Boxplots of individual percentile spreads by school
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = wm)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "WM percentile spreads, fall 2016", x = "School")
+```
+
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = filtering)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Filtering percentile spreads, fall 2016", x = "School")
+```
+
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = focus)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Focus percentile spreads, fall 2016", x = "School")
+```
+
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = impulsivity)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Impulsivity percentile spreads, fall 2016", x = "School")
+```
+
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = goal_mgmt)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Goal mgmt percentile spreads, fall 2016", x = "School")
+```
+
+###Vertical scatterplots of individual percentile spreads by school
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = wm)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_wm_percentile), data = composites_summary_pre, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "WM percentile spreads, fall 2016", x = "School")
+```
+
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = filtering)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_filtering_percentile), data = composites_summary_pre, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "Filtering percentile spreads, fall 2016", x = "School")
+```
+
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = focus)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_focus_percentile), data = composites_summary_pre, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "Focus percentile spreads, fall 2016", x = "School")
+```
+
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = impulsivity)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_impulsivity_percentile), data = composites_summary_pre, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "Impulsivity percentile spreads, fall 2016", x = "School")
+```
+
+```{r}
+clean_pre$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = goal_mgmt)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_goal_mgmt_percentile), data = composites_summary_pre, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "Goal mgmt percentile spreads, fall 2016", x = "School")
+```
+
+###Mean percentile scores by school/grade
+```{r}
+kable(composites_summary_pre)
+```
+
+##Spring 2017 composite percentile scores
+###Boxplots of individual percentile spreads by school
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = wm)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "WM percentile spreads, spring 2017", x = "School")
+```
+
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = filtering)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Filtering percentile spreads, spring 2017", x = "School")
+```
+
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = focus)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Focus percentile spreads, spring 2017", x = "School")
+```
+
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = impulsivity)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Impulsivity percentile spreads, spring 2017", x = "School")
+```
+
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = goal_mgmt)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Goal mgmt percentile spreads, spring 2017", x = "School")
+```
+
+
+###Vertical scatterplots of individual percentile spreads by school
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = wm)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_wm_percentile), data = composites_summary_post, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "WM percentile spreads, spring 2017", x = "School")
+```
+
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = filtering)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_filtering_percentile), data = composites_summary_post, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "Filtering percentile spreads, spring 2017", x = "School")
+```
+
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = focus)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_focus_percentile), data = composites_summary_post, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "Focus percentile spreads, spring 2017", x = "School")
+```
+
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = impulsivity)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_impulsivity_percentile), data = composites_summary_post, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "Impulsivity percentile spreads, spring 2017", x = "School")
+```
+
+```{r}
+clean_post$COMPOSITES %>%
+  select(pid, grade_label, school_abbrev, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  ggplot(aes(x = school_abbrev, y = goal_mgmt)) +
+  geom_jitter() +
+  geom_point(aes(y = mean_goal_mgmt_percentile), data = composites_summary_post, color = "dodgerblue", size = 3) +
+  facet_grid(~ grade_label) +
+  labs(title = "Goal mgmt percentile spreads, spring 2017", x = "School")
+```
+
+###Mean percentile scores by school/grade
+```{r}
+kable(composites_summary_post)
+```
+
+##Change in percentile rank from F16 to S17
+###Boxplots of individual percentile spreads by school
+```{r}
+composites_s17_f16_delta %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = wm)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "WM percentile spreads, S17 - F16 change", x = "School")
+```
+
+```{r}
+composites_s17_f16_delta %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = filtering)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Filtering percentile spreads, S17 - F16 change", x = "School")
+```
+
+```{r}
+composites_s17_f16_delta %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = focus)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Focus percentile spreads, S17 - F16 change", x = "School")
+```
+
+```{r}
+composites_s17_f16_delta %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = impulsivity)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Impulsivity percentile spreads, S17 - F16 change", x = "School")
+```
+
+```{r}
+composites_s17_f16_delta %>%
+  select(pid, grade_label, school, wm, filtering, focus, impulsivity, goal_mgmt) %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = goal_mgmt)) +
+  geom_boxplot() +
+  facet_grid(~ grade_label) +
+  labs(title = "Goal mgmt percentile spreads, S17 - F16 change", x = "School")
+```
+
+###Mean percentile scores by grade, across school
+```{r}
+composites_s17_f16_grade_long %>%
+  ungroup() %>%
+  ggplot(aes(x = grade_label, y = mean_wm_percentile, color = factor(time))) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_wm_percentile - se_wm_percentile, ymax = mean_wm_percentile + se_wm_percentile)) +
+  labs(title = "WM mean percentiles", x = "Grade", y = "Mean WM percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+```{r}
+composites_s17_f16_grade_long %>%
+  ungroup() %>%
+  ggplot(aes(x = grade_label, y = mean_filtering_percentile, color = factor(time))) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_filtering_percentile - se_filtering_percentile, ymax = mean_filtering_percentile + se_filtering_percentile)) +
+  labs(title = "Filtering mean percentiles", x = "Grade", y = "Mean filtering percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+```{r}
+composites_s17_f16_grade_long %>%
+  ungroup() %>%
+  ggplot(aes(x = grade_label, y = mean_focus_percentile, color = factor(time))) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_focus_percentile - se_focus_percentile, ymax = mean_focus_percentile + se_focus_percentile)) +
+  labs(title = "Focus mean percentiles", x = "Grade", y = "Mean focus percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+```{r}
+composites_s17_f16_grade_long %>%
+  ungroup() %>%
+  ggplot(aes(x = grade_label, y = mean_impulsivity_percentile, color = factor(time))) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_impulsivity_percentile - se_impulsivity_percentile, ymax = mean_impulsivity_percentile + se_impulsivity_percentile)) +
+  labs(title = "Impulsivity mean percentiles", x = "Grade", y = "Mean impulsivity percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+```{r}
+composites_s17_f16_grade_long %>%
+  ungroup() %>%
+  ggplot(aes(x = grade_label, y = mean_goal_mgmt_percentile, color = factor(time))) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = mean_goal_mgmt_percentile - se_goal_mgmt_percentile, ymax = mean_goal_mgmt_percentile + se_goal_mgmt_percentile)) +
+  labs(title = "Goal mgmt mean percentiles", x = "Grade", y = "Mean goal mgmt percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+###Mean percentile scores by school
+```{r}
+composites_s17_f16_long %>%
+  ungroup() %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = mean_wm_percentile, color = factor(time))) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean_wm_percentile - se_wm_percentile, ymax = mean_wm_percentile + se_wm_percentile)) +
+  facet_grid(~ grade_label) +
+  labs(title = "WM mean percentiles", x = "School", y = "Mean WM percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+```{r}
+composites_s17_f16_long %>%
+  ungroup() %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = mean_filtering_percentile, color = factor(time))) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean_filtering_percentile - se_filtering_percentile, ymax = mean_filtering_percentile + se_filtering_percentile)) +
+  facet_grid(~ grade_label) +
+  labs(title = "Filtering mean percentiles", x = "School", y = "Mean filtering percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+```{r}
+composites_s17_f16_long %>%
+  ungroup() %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = mean_focus_percentile, color = factor(time))) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean_focus_percentile - se_focus_percentile, ymax = mean_focus_percentile + se_focus_percentile)) +
+  facet_grid(~ grade_label) +
+  labs(title = "Focus mean percentiles", x = "School", y = "Mean focus percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+```{r}
+composites_s17_f16_long %>%
+  ungroup() %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = mean_impulsivity_percentile, color = factor(time))) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean_impulsivity_percentile - se_impulsivity_percentile, ymax = mean_impulsivity_percentile + se_impulsivity_percentile)) +
+  facet_grid(~ grade_label) +
+  labs(title = "Impulsivity mean percentiles", x = "School", y = "Mean impulsivity percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+```{r}
+composites_s17_f16_long %>%
+  ungroup() %>%
+  mutate(school_abbrev = mapvalues(school, from = c("Bracher", "Peterson", "Laurelwood", "Seacrest", "Cabrillo", "Bowers", "Most Holy Trinity", "Millikin"), to = c("br", "pe", "la", "se", "ca", "bo", "mh", "mk"))) %>%
+  ggplot(aes(x = school_abbrev, y = mean_goal_mgmt_percentile, color = factor(time))) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean_goal_mgmt_percentile - se_goal_mgmt_percentile, ymax = mean_goal_mgmt_percentile + se_goal_mgmt_percentile)) +
+  facet_grid(~ grade_label) +
+  labs(title = "Goal mgmt mean percentiles", x = "School", y = "Mean goal mgmt percentile") +
+  guides(color = guide_legend(title = "Timepoint"))
+```
+
+
+###Mean changes in percentile scores by school/grade
+```{r}
+kable(composites_summary_s17_f16_delta)
+```
+
