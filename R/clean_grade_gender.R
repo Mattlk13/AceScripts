@@ -1,17 +1,25 @@
 require(plyr) # the calling markdown must have these loaded already
 require(dplyr)
 clean_grade_gender = function(df) {
-  df %>%
-    mutate(grade = as.factor(grade),
-           gender = as.factor(gender),
-           grade_num = NA) %>%
+  df = df %>%
+    mutate(grade = as.numeric(grade),
+           grade_label = as.factor(paste("Grade", grade)),
+           grade_label = na_if(grade_label, "Grade NA"),
+           grade = grade - min(grade, na.rm = T), # center to the YOUNGEST grade = 0
+           age = na_if(age, ""),
+           age = na_if(age, "?"),
+           age = as.numeric(age),
+           gender = na_if(gender, ""),
+           gender = na_if(gender, "?"),
+           gender = mapvalues(gender, from = c("MALE", "FEMALE"), to = c("M", "F")),
+           gender = as.factor(gender)) %>%
     within({
-      grade_num[grade == "3rd Grade"] = 3
-      grade_num[grade == "5th Grade"] = 5
-      grade_num[grade == "7th Grade"] = 7
-    }) %>%
-    mutate(grade_num = grade_num - 3) %>%
-    within({
-      contrasts(gender) = c(-1, 1)
+      contrasts(gender) = c(-1, 1) # females, then males (expect females to be FASTER)
     })
+  if ("handedness" %in% names(df)) {
+    df = df %>%
+      mutate(handedness = na_if(handedness, ""),
+             handedness = na_if(handedness, "?"))
+  }
+  return (df)
 }

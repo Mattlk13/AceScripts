@@ -7,46 +7,39 @@ cat("\n") %>% asis_output() # need this for line breaking
 
 d_raw <- proc_demo[[this_task]]
 
-d_raw <- d_raw[grep(paste0(prefixes, collapse = "|"), d_raw$pid),] # only including data from real Ss (with school-specific ID prefixes)
-d_raw = d_raw %>% filter(time != "0", time != "TIME:", !is.na(grade))
+d_raw = d_raw %>% filter(time != "0", time != "TIME:")
 ## ----rm_outliers---------------------------------------------
 # the approach is taken here to remove a subject from ALL metrics of a module
 # if they are an outlier in ANY metrics of that module, to improve interpretation b/w metrics
 # any outliers removed in the BRT data will be excluded from ALL metrics for ALL modules.
 
-bad_subs = vector("list", length(unique(d_raw$grade)))
-for (i in 1:length(vars_of_interest)) {# for each grade, concatenates outliers ACROSS metrics of interest
-  for (j in 1:length(unique(d_raw$grade))) {
-    # need this to verify that there are >2 valid data pts in this grade level to do the outlier test
-    these_vals_temp = with(d_raw, get(vars_of_interest[i])[grade == unique(grade)[j] & !is.na(get(vars_of_interest[i]))])
+bad_subs = NULL
+for (i in 1:length(vars_of_interest)) {# concatenates outliers ACROSS metrics of interest
+    # need this to verify that there are >2 valid data pts to do the outlier test
+    these_vals_temp = with(d_raw, get(vars_of_interest[i])[!is.na(get(vars_of_interest[i]))])
     if(length(these_vals_temp) > 2) {
       these_bad_subs = d_raw %>%
-        filter(grade == unique(grade)[j]) %>%
         with(
           get_outlier_subs(get(vars_of_interest[i]), pid))
     } else {these_bad_subs = NULL}
-    if(!is.null(these_bad_subs)) {bad_subs[[j]] = c(bad_subs[[j]], these_bad_subs)}
-  }
+    if(!is.null(these_bad_subs)) {bad_subs = c(bad_subs, these_bad_subs)}
 }
 
 d <- d_raw %>%
   filter(!(pid %in% unlist(bad_subs)))
 
 ## ----rm_outliers_diff_vars-----------------------------------
-bad_subs = vector("list", length(unique(d_raw$grade)))
+bad_subs = NULL
 
-for (i in 1:length(outlier_vars)) {# for each grade, concatenates outliers ACROSS metrics of interest
-  for (j in 1:length(unique(d_raw$grade))) {
+for (i in 1:length(outlier_vars)) {# concatenates outliers ACROSS metrics of interest
     # need this to verify that there are >2 valid data pts in this grade level to do the outlier test
-    these_vals_temp = with(d_raw, get(outlier_vars[i])[grade == unique(grade)[j] & !is.na(get(outlier_vars[i]))])
+    these_vals_temp = with(d_raw, get(outlier_vars[i])[!is.na(get(outlier_vars[i]))])
     if(length(these_vals_temp) > 2) {
       these_bad_subs = d_raw %>%
-        filter(grade == unique(grade)[j]) %>%
         with(
           get_outlier_subs(get(outlier_vars[i]), pid))
     } else {these_bad_subs = NULL}
-    if(!is.null(these_bad_subs)) {bad_subs[[j]] <- c(bad_subs[[j]], these_bad_subs)}
-  }
+    if(!is.null(these_bad_subs)) {bad_subs <- c(bad_subs, these_bad_subs)}
 }
 
 d <- d_raw %>%
@@ -86,20 +79,20 @@ print(short_rt_subs)
 if(this_task %in% c("SPATIALSPAN", "BACKWARDSSPATIALSPAN", "FILTER")) {d <- d_raw} # dumb edge case, can't run rm_outliers on span so must init d here
 if(this_task == "BRT") { # edge case, don't append BRT to itself
   d <- d %>%
-    clean_grade_gender() %>%
+    clean_gender() %>%
     mutate(rt_mean.dominant = if_else(handedness == "R", rt_mean.right, rt_mean.left, NA_real_),
            rt_mean.nondominant = if_else(handedness == "L", rt_mean.right, rt_mean.left, NA_real_))
 } else {
   d <- d %>%
     brt_append(brt) %>%
-    clean_grade_gender()
+    clean_gender()
 }
 # NB: gender is effect coded female: -1 male: 1
 # such that a POSITIVE beta estimate for RT change by gender indicates that FEMALES are faster (RT for males HIGHER)
 
-asis_output("##n by grade and gender")
+asis_output("##n by gender")
 cat("\n") %>% asis_output()
-table(d$grade_label, d$gender)
+table(d$gender)
 
 ## ----qc_graphs-----------------------------------------------------------
 asis_output("##quality control histograms")
@@ -107,10 +100,9 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  ggplot(aes(x = get(vars_of_interest[1]), fill = factor(grade_label))) +
+  ggplot(aes(x = get(vars_of_interest[1]))) +
   geom_histogram(bins=20, position="dodge") +
-  labs(x = vars_of_interest_long[1]) +
-  guides(fill = guide_legend(title = "Grade"))
+  labs(x = vars_of_interest_long[1])
 
 cat("\n\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -118,10 +110,9 @@ if(!invalid(vars_of_interest[2])) {
     asis_output()}
 if(!invalid(vars_of_interest[2])) {
   d %>%
-    ggplot(aes(x = get(vars_of_interest[2]), fill = factor(grade_label))) +
+    ggplot(aes(x = get(vars_of_interest[2]))) +
     geom_histogram(bins=20, position="dodge") +
-    labs(x = vars_of_interest_long[2]) +
-    guides(fill = guide_legend(title = "Grade"))}
+    labs(x = vars_of_interest_long[2])}
 
 cat("\n\n") %>% asis_output()
 if(!invalid(vars_of_interest[3])) {
@@ -129,67 +120,9 @@ if(!invalid(vars_of_interest[3])) {
     asis_output()}
 if(!invalid(vars_of_interest[3])) {
   d %>%
-    ggplot(aes(x = get(vars_of_interest[3]), fill = factor(grade_label))) +
+    ggplot(aes(x = get(vars_of_interest[3]))) +
     geom_histogram(bins=20, position="dodge") +
-    labs(x = vars_of_interest_long[3]) +
-    guides(fill = guide_legend(title = "Grade"))}
-
-## ----residual_rt_graphs--------------------------------------------------
-asis_output("##BRT - task RT residuals")
-cat("\n") %>% asis_output()
-paste("###", vars_of_interest_long[1], sep = "") %>%
-  asis_output()
-d %>%
-  filter_(paste0("!is.na(", brt_rt_var, ") & !is.na(", vars_of_interest[1], ")")) %>%
-  mutate(predicted = predict(lm(get(vars_of_interest[1]) ~ get(brt_rt_var), d)),
-         residual = resid(lm(get(vars_of_interest[1]) ~ get(brt_rt_var), d))) %>%
-  ggplot(aes(x = get(brt_rt_var), y = get(vars_of_interest[1]))) +
-  geom_segment(aes(xend = get(brt_rt_var), yend = predicted, color = residual)) +
-  geom_point(aes(y = predicted), shape = 1) +
-  geom_point(aes(color = residual)) +
-  scale_color_continuous(low = "black", high = "mediumpurple1") +
-  guides(color = FALSE) +
-  facet_grid(grade_label ~ gender) +
-  labs(x = brt_rt_var, y = vars_of_interest_long[1])
-
-cat("\n\n") %>% asis_output()
-if(!invalid(vars_of_interest[2])) {
-  paste("###", vars_of_interest_long[2], sep = "") %>%
-    asis_output()}
-if(!invalid(vars_of_interest[2])) {
-  d %>%
-    filter_(paste0("!is.na(", brt_rt_var, ") & !is.na(", vars_of_interest[2], ")")) %>%
-    mutate(predicted = predict(lm(get(vars_of_interest[2]) ~ get(brt_rt_var), d)),
-           residual = resid(lm(get(vars_of_interest[2]) ~ get(brt_rt_var), d))) %>%
-    ggplot(aes(x = get(brt_rt_var), y = get(vars_of_interest[2]))) +
-    geom_segment(aes(xend = get(brt_rt_var), yend = predicted, color = residual)) +
-    geom_point(aes(y = predicted), shape = 2) +
-    geom_point(aes(color = residual)) +
-    scale_color_continuous(low = "black", high = "mediumpurple2") +
-    guides(color = FALSE) +
-    facet_grid(grade_label ~ gender) +
-    labs(x = brt_rt_var, y = vars_of_interest_long[2])
-  }
-
-cat("\n\n") %>% asis_output()
-if(!invalid(vars_of_interest[3])) {
-  paste("###", vars_of_interest_long[3], sep = "") %>%
-    asis_output()}
-if(!invalid(vars_of_interest[3])) {
-  d %>%
-    filter_(paste0("!is.na(", brt_rt_var, ") & !is.na(", vars_of_interest[3], ")")) %>%
-    mutate(predicted = predict(lm(get(vars_of_interest[3]) ~ get(brt_rt_var), d)),
-           residual = resid(lm(get(vars_of_interest[3]) ~ get(brt_rt_var), d))) %>%
-    ggplot(aes(x = get(brt_rt_var), y = get(vars_of_interest[3]))) +
-    geom_segment(aes(xend = get(brt_rt_var), yend = predicted, color = residual)) +
-    geom_point(aes(y = predicted), shape = 3) +
-    geom_point(aes(color = residual)) +
-    scale_color_continuous(low = "black", high = "mediumpurple3") +
-    guides(color = FALSE) +
-    facet_grid(grade_label ~ gender) +
-    labs(x = brt_rt_var, y = vars_of_interest_long[3])
-  }
-
+    labs(x = vars_of_interest_long[3])}
 ## ----score_feedback_means--------------------------------------------------
 asis_output("##mean scores for giving feedback in task")
 cat("\n") %>% asis_output()
@@ -200,7 +133,6 @@ cat("\n") %>% asis_output()
 
 if(is.na(score_formula)) {
   d_score = d %>%
-    group_by(grade) %>%
     select(one_of(score_vars))
   
   if(length(score_vars) == 1) {
@@ -221,7 +153,6 @@ if(is.na(score_formula)) {
   cat("score formula: ((((b-a)/a) * 100) + 100) \na:", score_vars[1], "\nb:", score_vars[2])
   d_score = d %>%
     mutate_(score = interp(~((((b-a)/a)*100)+100), a = as.name(score_vars[1]), b = as.name(score_vars[2]))) %>%
-    group_by(grade) %>%
     select(score) %>%
     summarize(score_mean = mean(score),
               score_sd = sd(score))
@@ -231,11 +162,11 @@ print(d_score)
 
 ## ----lms-----------------------------------------------------------------
 asis_output("##regressions, overall")
-cat("\n", "BRT RT being regressed here:", brt_rt_var) %>% asis_output()
+cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender + scale(get(brt_rt_var), scale = Z_SCORE_XREGS))))
+  with(summary(lm(get(vars_of_interest[1]) ~ age * gender + scale(brt_rt_mean.dominant, scale = Z_SCORE_XREGS))))
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -243,7 +174,7 @@ if(!invalid(vars_of_interest[2])) {
     asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
 if(!invalid(vars_of_interest[2])) {
   d %>%
-    with(summary(lm(get(vars_of_interest[2]) ~ grade * gender + scale(get(brt_rt_var), scale = Z_SCORE_XREGS))))}
+    with(summary(lm(get(vars_of_interest[2]) ~ age * gender + scale(brt_rt_mean.dominant, scale = Z_SCORE_XREGS))))}
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[3])) {
@@ -251,7 +182,7 @@ if(!invalid(vars_of_interest[3])) {
     asis_output()}
 if(!invalid(vars_of_interest[3])) {
   d %>%
-    with(summary(lm(get(vars_of_interest[3]) ~ grade * gender + scale(get(brt_rt_var), scale = Z_SCORE_XREGS))))}
+    with(summary(lm(get(vars_of_interest[3]) ~ age * gender + scale(brt_rt_mean.dominant, scale = Z_SCORE_XREGS))))}
 
 ## ----lms_no_brt----------------------------------------------------------
 # for ones where acc should not be regressed by BRT RT
@@ -260,7 +191,7 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
-  with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
+  with(summary(lm(get(vars_of_interest[1]) ~ age * gender)))
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -269,7 +200,7 @@ if(!invalid(vars_of_interest[2])) {
 }
 if(!invalid(vars_of_interest[2])) {
   d %>%
-    with(summary(lm(get(vars_of_interest[2]) ~ grade * gender)))
+    with(summary(lm(get(vars_of_interest[2]) ~ age * gender)))
 }
 
 ## ----lms_by_acc----------------------------------------------------------
@@ -278,12 +209,12 @@ cat("\n") %>% asis_output()
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d_acc <- d %>%
-  select_("pid", "age", "grade", "gender", "brt_rt_mean.overall", correct = vars_of_interest_acc[[1]][1], incorrect = vars_of_interest_acc[[1]][2]) %>%
+  select_("pid", "age", "gender", "brt_rt_mean.overall", correct = vars_of_interest_acc[[1]][1], incorrect = vars_of_interest_acc[[1]][2]) %>%
   gather(acc, rt_mean, -(pid:brt_rt_mean.overall)) %>%
   mutate(acc = as.factor(acc)) # leaving accuracy DUMMY coded here
 
 d_acc %>%
-  with(summary(lm(rt_mean ~ grade * gender * acc)))
+  with(summary(lm(rt_mean ~ age * gender * acc)))
 
 cat("\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -291,12 +222,12 @@ if(!invalid(vars_of_interest[2])) {
     asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
 if(!invalid(vars_of_interest[2])) {
   d_acc <- d %>%
-    select_("pid", "age", "grade", "gender", "brt_rt_mean.overall", correct = vars_of_interest_acc[[2]][1], incorrect = vars_of_interest_acc[[2]][2]) %>%
+    select_("pid", "age", "gender", "brt_rt_mean.overall", correct = vars_of_interest_acc[[2]][1], incorrect = vars_of_interest_acc[[2]][2]) %>%
     gather(acc, rt_mean, -(pid:brt_rt_mean.overall)) %>%
     mutate(acc = as.factor(acc)) # leaving accuracy DUMMY coded here
   
   d_acc %>%
-    with(summary(lm(rt_mean ~ grade * gender * acc)))
+    with(summary(lm(rt_mean ~ age * gender * acc)))
 }
 
 cat("\n") %>% asis_output()
@@ -305,12 +236,12 @@ if(!invalid(vars_of_interest[3])) {
     asis_output()} # dumb: they have to be in two separate if statements to get the heading to render
 if(!invalid(vars_of_interest[3])) {
   d_acc <- d %>%
-    select_("pid", "age", "grade", "gender", "brt_rt_mean.overall", correct = vars_of_interest_acc[[3]][1], incorrect = vars_of_interest_acc[[3]][2]) %>%
+    select_("pid", "age", "gender", "brt_rt_mean.overall", correct = vars_of_interest_acc[[3]][1], incorrect = vars_of_interest_acc[[3]][2]) %>%
     gather(acc, rt_mean, -(pid:brt_rt_mean.overall)) %>%
     mutate(acc = as.factor(acc)) # leaving accuracy DUMMY coded here
   
   d_acc %>%
-    with(summary(lm(rt_mean ~ grade * gender * acc)))
+    with(summary(lm(rt_mean ~ age * gender * acc)))
 }
 ## ----graphs--------------------------------------------------------------
 asis_output("##graphs")
@@ -319,10 +250,11 @@ paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
   filter(!is.na(gender)) %>%
-  ggplot(aes(x = grade_label, y = get(vars_of_interest[1]), fill = factor(gender))) +
-  geom_boxplot() +
+  ggplot(aes(x = age, y = get(vars_of_interest[1]), color = factor(gender))) +
+  geom_point() +
+  geom_smooth(method = lm) +
   labs(y = vars_of_interest_long[1]) +
-  guides(fill = guide_legend(title = "Gender"))
+  guides(color = guide_legend(title = "Gender"))
 
 cat("\n\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -331,10 +263,11 @@ if(!invalid(vars_of_interest[2])) {
 if(!invalid(vars_of_interest[2])) {
   d %>%
     filter(!is.na(gender)) %>%
-    ggplot(aes(x = grade_label, y = get(vars_of_interest[2]), fill = factor(gender))) +
-    geom_boxplot() +
+    ggplot(aes(x = age, y = get(vars_of_interest[2]), color = factor(gender))) +
+    geom_point() +
+    geom_smooth(method = lm) +
     labs(y = vars_of_interest_long[2]) +
-    guides(fill = guide_legend(title = "Gender"))
+    guides(color = guide_legend(title = "Gender"))
 }
 
 cat("\n\n") %>% asis_output()
@@ -344,10 +277,11 @@ if(!invalid(vars_of_interest[3])) {
 if(!invalid(vars_of_interest[3])) {
   d %>%
     filter(!is.na(gender)) %>%
-    ggplot(aes(x = grade_label, y = get(vars_of_interest[3]), fill = factor(gender))) +
-    geom_boxplot() +
+    ggplot(aes(x = age, y = get(vars_of_interest[3]), color = factor(gender))) +
+    geom_point() +
+    geom_smooth(method = lm) +
     labs(y = vars_of_interest_long[3]) +
-    guides(fill = guide_legend(title = "Gender"))
+    guides(color = guide_legend(title = "Gender"))
 }
 
 ## ----graphs_by_acc-------------------------------------------------------
@@ -357,16 +291,18 @@ paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
   filter(!is.na(gender)) %>%
-  ggplot(aes(x = grade_label, y = get(vars_of_interest_acc[[1]][1]), fill = factor(gender))) +
-  geom_boxplot() +
+  ggplot(aes(x = age, y = get(vars_of_interest_acc[[1]][1]), color = factor(gender))) +
+  geom_point() +
+  geom_smooth(method = lm) +
   labs(y = vars_of_interest_acc_long[[1]][1]) +
-  guides(fill = guide_legend(title = "Gender"))
+  guides(color = guide_legend(title = "Gender"))
 d %>%
   filter(!is.na(gender)) %>%
-  ggplot(aes(x = grade_label, y = get(vars_of_interest_acc[[1]][2]), fill = factor(gender))) +
-  geom_boxplot() +
+  ggplot(aes(x = age, y = get(vars_of_interest_acc[[1]][2]), color = factor(gender))) +
+  geom_point() +
+  geom_smooth(method = lm) +
   labs(y = vars_of_interest_acc_long[[1]][2]) +
-  guides(fill = guide_legend(title = "Gender"))
+  guides(color = guide_legend(title = "Gender"))
 
 cat("\n\n") %>% asis_output()
 if(!invalid(vars_of_interest[2])) {
@@ -375,18 +311,20 @@ if(!invalid(vars_of_interest[2])) {
 if(!invalid(vars_of_interest[2])) {
   d %>%
     filter(!is.na(gender)) %>%
-    ggplot(aes(x = grade_label, y = get(vars_of_interest_acc[[2]][1]), fill = factor(gender))) +
-    geom_boxplot() +
+    ggplot(aes(x = age, y = get(vars_of_interest_acc[[2]][1]), color = factor(gender))) +
+    geom_point() +
+    geom_smooth(method = lm) +
     labs(y = vars_of_interest_acc_long[[2]][1]) +
-    guides(fill = guide_legend(title = "Gender"))
+    guides(color = guide_legend(title = "Gender"))
 }
 if(!invalid(vars_of_interest[2])) {
   d %>%
     filter(!is.na(gender)) %>%
-    ggplot(aes(x = grade_label, y = get(vars_of_interest_acc[[2]][2]), fill = factor(gender))) +
-    geom_boxplot() +
+    ggplot(aes(x = age, y = get(vars_of_interest_acc[[2]][2]), color = factor(gender))) +
+    geom_point() +
+    geom_smooth(method = lm) +
     labs(y = vars_of_interest_acc_long[[2]][2]) +
-    guides(fill = guide_legend(title = "Gender"))
+    guides(color = guide_legend(title = "Gender"))
 }
 
 cat("\n\n") %>% asis_output()
@@ -396,16 +334,18 @@ if(!invalid(vars_of_interest[3])) {
 if(!invalid(vars_of_interest[3])) {
   d %>%
     filter(!is.na(gender)) %>%
-    ggplot(aes(x = grade_label, y = get(vars_of_interest_acc[[3]][1]), fill = factor(gender))) +
-    geom_boxplot() +
+    ggplot(aes(x = age, y = get(vars_of_interest_acc[[3]][1]), color = factor(gender))) +
+    geom_point() +
+    geom_smooth(method = lm) +
     labs(y = vars_of_interest_acc_long[[3]][1]) +
-    guides(fill = guide_legend(title = "Gender"))
+    guides(color = guide_legend(title = "Gender"))
 }
 if(!invalid(vars_of_interest[3])) {
   d %>%
     filter(!is.na(gender)) %>%
-    ggplot(aes(x = grade_label, y = get(vars_of_interest_acc[[3]][2]), fill = factor(gender))) +
-    geom_boxplot() +
+    ggplot(aes(x = age, y = get(vars_of_interest_acc[[3]][2]), color = factor(gender))) +
+    geom_point() +
+    geom_smooth(method = lm) +
     labs(y = vars_of_interest_acc_long[[3]][2]) +
-    guides(fill = guide_legend(title = "Gender"))
+    guides(color = guide_legend(title = "Gender"))
 }

@@ -15,6 +15,7 @@ library(ggplot2)
 library(tidyr)
 library(plyr)
 library(dplyr)
+library(stringr)
 library(lazyeval)
 library(outliers)
 library(gtools)
@@ -51,7 +52,10 @@ Z_SCORE_XREGS = TRUE
 
 ```{r loading cached -by hand- data}
 # load(file = "~/Dropbox/aceR/seacrest_data/clean_data.RData")
-load(file = "~/Documents/ace_large_data/almost_all_preproc_122816.RData")
+# load(file = "~/Documents/ace_large_data/almost_all_preproc_122816.RData")
+# load(file = "~/Documents/ace_large_data/almost_all_preproc_050217.RData")
+load(file = "~/Documents/ace_large_data/s17_preproc_071717.RData")
+proc_demo = proc_s17_all; rm(proc_s17_all)
 ```
 
 ```{r read_chunking, cache=FALSE}
@@ -75,26 +79,90 @@ score_vars = c("rt_mean.overall")
 score_formula = NA
 ```
 
-```{r ref.label="df_from_proc_demo"}
+```{r load brt from proc_demo}
+if(this_task == "BRT" & !BRT_PRINT) {} else { # edge case where BRT needs to be evaluated even if no print (and thus header turned off)
+  paste0("#", this_task_long) %>%
+    asis_output()}
+asis_output(print("\n")) # need this for line breaking
+
+grab_module <- function(proc_demo, this_task) {
+  d_raw <- proc_demo[[this_task]]
+  d_raw <- d_raw[grep(paste0(prefixes, collapse = "|"), d_raw$pid),] # only including data from real Ss (with school-specific ID prefixes)
+  d_raw = d_raw %>% filter(time != "0", time != "TIME:", !is.na(grade))
+  return (d_raw)
+}
+
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="rm_outliers_diff_vars"}
+```{r brt clean outliers}
+find_outliers <- function(d_raw, vars) {
+  bad_subs = vector("list", length(unique(d_raw$grade)))
+  
+  for (i in 1:length(vars)) {# for each grade, concatenates vars ACROSS metrics of interest
+    for (j in 1:length(unique(d_raw$grade))) {
+      # need this to verify that there are >2 valid data pts in this grade level to do the outlier test
+      these_vals_temp = with(d_raw, get(vars[i])[grade == unique(grade)[j] & !is.na(get(vars[i]))])
+      if(length(these_vals_temp) > 2) {
+        these_bad_subs = d_raw %>%
+          filter(grade == unique(grade)[j]) %>%
+          with(
+            get_outlier_subs(get(vars[i]), pid))
+      } else {these_bad_subs = NULL}
+      if(!is.null(these_bad_subs)) {bad_subs[[j]] = c(bad_subs[[j]], these_bad_subs)}
+    }
+  }
+  return (unlist(bad_subs))
+}
+
+bad_subs = find_outliers(d_raw, outlier_vars)
+d <- d_raw %>%
+  filter(!(pid %in% bad_subs))
 ```
 
-```{r ref.label="rm_short_rts_diff_vars", eval=BRT_PRINT}
+```{r brt clean short rts, eval=BRT_PRINT}
+find_short_rts <- function(d, vars) {
+  short_rt_subs = NULL
+  
+  for (i in 1:min(c(length(vars), 2))) { # if there are 3 vars of interest the 3rd one is cost, which should NOT be counted for this
+    short_rt_subs = c(short_rt_subs, d$pid[d[, vars[i]] < 150])
+  }
+  short_rt_subs = short_rt_subs[!is.na(short_rt_subs)]
+  return (short_rt_subs)
+}
+
+short_rt_subs = find_short_rts(d, outlier_vars)
+d <- d %>%
+  filter(!(pid %in% short_rt_subs))
+
+asis_output("##subs w/ short RTs on ANY var of interest(< 150 ms)")
+asis_output(print("\n"))
+print(short_rt_subs)
+
 ```
 
 ```{r brt preproc}
 # always run this irrespective of BRT_PRINT
 d <- d %>%
-  clean_grade_gender() %>%
-  mutate(rt_mean.dominant = if_else(handedness == "R", rt_mean.right, rt_mean.left, NA_real_),
-         rt_mean.nondominant = if_else(handedness == "L", rt_mean.right, rt_mean.left, NA_real_),
-         acc_mean.dominant = if_else(handedness == "R", acc_mean.right, acc_mean.left, NA_real_),
-         acc_mean.nondominant = if_else(handedness == "L", acc_mean.right, acc_mean.left, NA_real_))
+  clean_grade_gender()
+
+if ("handedness" %in% names(d)) {
+  d <- d %>%
+    mutate(rt_mean.dominant = if_else(handedness == "R", rt_mean.right, rt_mean.left, NA_real_),
+           rt_mean.nondominant = if_else(handedness == "L", rt_mean.right, rt_mean.left, NA_real_),
+           acc_mean.dominant = if_else(handedness == "R", acc_mean.right, acc_mean.left, NA_real_),
+           acc_mean.nondominant = if_else(handedness == "L", acc_mean.right, acc_mean.left, NA_real_))
+} else { # if handedness not provided, assume all R handed (for purposes of actually running analysis)
+  d <- d %>%
+    mutate(rt_mean.dominant = rt_mean.right,
+           rt_mean.nondominant = rt_mean.left,
+           acc_mean.dominant = acc_mean.right,
+           acc_mean.nondominant = acc_mean.left)
+}
+
 
 asis_output("##n by grade and gender")
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 table(d$grade_label, d$gender)
 ```
 
@@ -111,13 +179,13 @@ brt <- d
 ```{r brt lms, eval=BRT_PRINT}
 # edge case here where BRT can't be regressed against itself
 asis_output("##regressions")
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
   with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
 
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 paste("###", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 d %>%
@@ -132,13 +200,13 @@ vars_of_interest = c("acc_mean.dominant", "acc_mean.nondominant")
 vars_of_interest_long = c("Accuracy--dominant hand", "Accuracy--non-dominant hand") 
 
 asis_output("##regressions")
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
   with(summary(lm(get(vars_of_interest[1]) ~ grade * gender)))
 
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 paste("###", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 d %>%
@@ -165,16 +233,33 @@ score_formula = "fraction"
 brt_rt_var = "brt_rt_mean.dominant"
 ```
 
-```{r ref.label="df_from_proc_demo", eval=BOX_PRINT}
+```{r boxed load from proc_demo, eval=BOX_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="rm_outliers_diff_vars", eval=BOX_PRINT}
+```{r boxed remove outliers, eval=BOX_PRINT}
+bad_subs = find_outliers(d_raw, outlier_vars)
+d <- d_raw %>%
+  filter(!(pid %in% bad_subs))
 ```
 
-```{r ref.label="rm_short_rts_diff_vars", eval=BOX_PRINT}
+```{r boxed remove short rts, eval=BOX_PRINT}
+short_rt_subs = find_short_rts(d, outlier_vars)
+d <- d %>%
+  filter(!(pid %in% short_rt_subs))
 ```
 
-```{r ref.label="preproc", eval=BOX_PRINT}
+```{r boxed preproc, eval=BOX_PRINT}
+d <- d %>%
+  brt_append(brt) %>%
+  clean_grade_gender()
+
+# NB: gender is effect coded female: -1 male: 1
+# such that a POSITIVE beta estimate for RT change by gender indicates that FEMALES are faster (RT for males HIGHER)
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
 
 ```{r boxed extra preproc, eval=BOX_PRINT}
@@ -215,16 +300,36 @@ d <- d %>%
 d <- d %>%
   mutate(acc_mean.feature = (acc_mean.feature_4 + acc_mean.feature_12) / 2,
          acc_mean.conjunction = (acc_mean.conjunction_4 + acc_mean.conjunction_12) / 2,
-         acc_mean.cost = acc_mean.conjunction - acc_mean.feature)
+         acc_mean.cost = acc_mean.conjunction - acc_mean.feature,
+         acc_mean.early.feature = (acc_mean.early.feature_4 + acc_mean.early.feature_12) / 2,
+         acc_mean.early.conjunction = (acc_mean.early.conjunction_4 + acc_mean.early.conjunction_12) / 2,
+         acc_mean.early.cost = acc_mean.early.conjunction - acc_mean.early.feature,
+         acc_mean.late.feature = (acc_mean.late.feature_4 + acc_mean.late.feature_12) / 2,
+         acc_mean.late.conjunction = (acc_mean.late.conjunction_4 + acc_mean.late.conjunction_12) / 2,
+         acc_mean.late.cost = acc_mean.late.conjunction - acc_mean.late.feature)
+
+boxed = d
 
 vars_of_interest = c("acc_mean.feature", "acc_mean.conjunction", "acc_mean.cost")
 vars_of_interest_long = c("Accuracy, feature trials", "Accuracy, conjunction trials", "Accuracy cost (conj - feat)") # nice version for printing in graphs
+vars_of_interest_acc = list(c("acc_mean.late.feature", "acc_mean.early.feature"),
+                            c("acc_mean.late.conjunction", "acc_mean.early.conjunction"),
+                            c("acc_mean.late.cost", "acc_mean.early.cost"))
+vars_of_interest_acc_long = list(c("Accuracy--feature trials, late press", "Accuracy--feature trials, early press"),
+                                 c("Accuracy--conjunction trials, late press", "Accuracy--conjunction trials, early press"),
+                                 c("Mean cost (conj - feat) on accuracy--late press", "Mean cost (conj - feat) on accuracy--early press"))
 ```
 
 ```{r ref.label="lms", eval=BOX_PRINT}
 ```
 
+```{r ref.label="lms_by_acc", eval=BOX_PRINT}
+```
+
 ```{r ref.label="graphs", eval=BOX_PRINT}
+```
+
+```{r ref.label="graphs_by_acc", eval=BOX_PRINT}
 ```
 
 ```{r setting vars for flanker READ ME}
@@ -243,17 +348,34 @@ score_formula = "fraction"
 brt_rt_var = "brt_rt_mean.overall"
 ```
 
-```{r ref.label="df_from_proc_demo", eval=FLANK_PRINT}
+```{r flanker load from proc_demo, eval=FLANK_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="rm_outliers", eval=FLANK_PRINT}
+```{r flanker remove outliers, eval=FLANK_PRINT}
+bad_subs = find_outliers(d_raw, vars_of_interest)
+d <- d_raw %>%
+  filter(!(pid %in% bad_subs))
 ```
 
-```{r ref.label="rm_short_rts", eval=FLANK_PRINT}
+```{r flanker remove short rts, eval=FLANK_PRINT}
+short_rt_subs = find_short_rts(d, vars_of_interest)
+d <- d %>%
+  filter(!(pid %in% short_rt_subs))
 ```
 
-```{r ref.label="preproc", eval=FLANK_PRINT}
+```{r flanker preproc, eval=FLANK_PRINT}
+d <- d %>%
+  brt_append(brt) %>%
+  clean_grade_gender()
+
+flanker = d
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
+
 
 ```{r ref.label="score_feedback_means", eval=FLANK_PRINT}
 ```
@@ -301,22 +423,30 @@ score_formula = NA
 brt_rt_var = "brt_rt_mean.overall"
 ```
 
-```{r ref.label="df_from_proc_demo", eval=SAAT_PRINT}
+```{r saat load from proc_demo, eval=SAAT_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="rm_outliers", eval=SAAT_PRINT}
+```{r saat remove outliers, eval=SAAT_PRINT}
+bad_subs = find_outliers(d_raw, vars_of_interest)
+d <- d_raw %>%
+  filter(!(pid %in% bad_subs))
 ```
 
-```{r ref.label="rm_short_rts", eval=SAAT_PRINT}
+```{r saat remove short rts, eval=FALSE}
+short_rt_subs = find_short_rts(d, vars_of_interest)
+d <- d %>%
+  filter(!(pid %in% short_rt_subs))
 ```
 
-```{r ref.label="preproc", eval=SAAT_PRINT}
-```
+```{r saat preproc, eval=SAAT_PRINT}
+d <- d %>%
+  brt_append(brt) %>%
+  clean_grade_gender()
 
-```{r saat extra preproc, eval=SAAT_PRINT}
-# as of 1/10/17: the aceR pipeline now switches the imp/sus labels! whee
-# 1 - acc_mean.0 roughly yields FA rate (true NRs get counted as CRs??), since acc_mean.0 is CR rate
-d <- d %>% # dumb snodgrassing
+# select(-contains(".."), -ends_with(".y"), -(acc_median.sustained.x:acc_mean.overall.x))
+# names(d)[grepl(".x", names(d))] = str_sub(names(d)[grepl(".x", names(d))], end = -3)
+d <- d %>%
   mutate(acc_mean.1.impulsive = if_else(acc_mean.1.impulsive == 1, .9999, acc_mean.1.impulsive),
          acc_mean.1.sustained = if_else(acc_mean.1.sustained == 1, .9999, acc_mean.1.sustained),
          acc_mean.0.impulsive = if_else(acc_mean.0.impulsive == 1, .9999, acc_mean.0.impulsive),
@@ -326,7 +456,16 @@ d <- d %>% # dumb snodgrassing
          acc_mean.0.impulsive = if_else(acc_mean.0.impulsive == 0, .0001, acc_mean.0.impulsive),
          acc_mean.0.sustained = if_else(acc_mean.0.sustained == 0, .0001, acc_mean.0.sustained),
          dprime.impulsive = qnorm(acc_mean.1.impulsive) - qnorm(1 - acc_mean.0.impulsive),
-         dprime.sustained = qnorm(acc_mean.1.sustained) - qnorm(1 - acc_mean.0.sustained))
+         dprime.sustained = qnorm(acc_mean.1.sustained) - qnorm(1 - acc_mean.0.sustained)) # dumb snodgrassing
+
+# as of 1/10/17: the aceR pipeline now switches the imp/sus labels! whee
+# 1 - acc_mean.0 roughly yields FA rate (true NRs get counted as CRs??), since acc_mean.0 is CR rate
+
+saat = d
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
 
 ```{r ref.label="score_feedback_means", eval=SAAT_PRINT}
@@ -382,11 +521,22 @@ score_vars = vars_of_interest
 score_formula = NA
 ```
 
-```{r ref.label="df_from_proc_demo", eval=SPAN_PRINT}
+```{r span load from proc_demo, eval=SPAN_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="preproc", eval=SPAN_PRINT}
+```{r span preproc, eval=SPAN_PRINT}
+d <- d_raw %>%
+  brt_append(brt) %>%
+  clean_grade_gender()
+
+span = d
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
+
 
 ```{r ref.label="score_feedback_means", eval=SPAN_PRINT}
 ```
@@ -410,10 +560,20 @@ score_vars = vars_of_interest
 score_formula = NA
 ```
 
-```{r ref.label="df_from_proc_demo", eval=BSPAN_PRINT}
+```{r bspan load from proc_demo, eval=BSPAN_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="preproc", eval=BSPAN_PRINT}
+```{r bspan preproc, eval=BSPAN_PRINT}
+d <- d_raw %>%
+  brt_append(brt) %>%
+  clean_grade_gender()
+
+bspan = d
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
 
 ```{r ref.label="score_feedback_means", eval=BSPAN_PRINT}
@@ -444,16 +604,32 @@ score_formula = "fraction"
 brt_rt_var = "brt_rt_mean.overall"
 ```
 
-```{r ref.label="df_from_proc_demo", eval=STROOP_PRINT}
+```{r stroop load from proc_demo, eval=STROOP_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="rm_outliers", eval=STROOP_PRINT}
+```{r stroop remove outliers, eval=STROOP_PRINT}
+bad_subs = find_outliers(d_raw, vars_of_interest)
+d <- d_raw %>%
+  filter(!(pid %in% bad_subs))
 ```
 
-```{r ref.label="rm_short_rts", eval=STROOP_PRINT}
+```{r stroop remove short rts, eval=STROOP_PRINT}
+short_rt_subs = find_short_rts(d, vars_of_interest)
+d <- d %>%
+  filter(!(pid %in% short_rt_subs))
 ```
 
-```{r ref.label="preproc", eval=STROOP_PRINT}
+```{r stroop preproc, eval=STROOP_PRINT}
+d <- d %>%
+  brt_append(brt) %>%
+  clean_grade_gender()
+
+stroop = d
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
 
 ```{r ref.label="score_feedback_means", eval=STROOP_PRINT}
@@ -504,17 +680,34 @@ score_formula = NA
 brt_rt_var = "brt_rt_mean.overall"
 ```
 
-```{r ref.label="df_from_proc_demo", eval=SWITCH_PRINT}
+```{r switch load from proc_demo, eval=SWITCH_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="rm_outliers", eval=SWITCH_PRINT}
+```{r switch remove outliers, eval=SWITCH_PRINT}
+bad_subs = find_outliers(d_raw, vars_of_interest)
+d <- d_raw %>%
+  filter(!(pid %in% bad_subs))
 ```
 
-```{r ref.label="rm_short_rts", eval=SWITCH_PRINT}
+```{r switch remove short rts, eval=SWITCH_PRINT}
+short_rt_subs = find_short_rts(d, vars_of_interest)
+d <- d %>%
+  filter(!(pid %in% short_rt_subs))
 ```
 
-```{r ref.label="preproc", eval=SWITCH_PRINT}
+```{r switch preproc, eval=SWITCH_PRINT}
+d <- d %>%
+  brt_append(brt) %>%
+  clean_grade_gender()
+
+switch = d
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
+
 
 ```{r ref.label="score_feedback_means", eval=SWITCH_PRINT}
 ```
@@ -564,17 +757,35 @@ score_formula = NA
 brt_rt_var = "brt_rt_mean.nondominant"
 ```
 
-```{r ref.label="df_from_proc_demo", eval=TNT_PRINT}
+
+```{r tnt load from proc_demo, eval=TNT_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="rm_outliers", eval=TNT_PRINT}
+```{r tnt remove outliers, eval=TNT_PRINT}
+bad_subs = find_outliers(d_raw, vars_of_interest)
+d <- d_raw %>%
+  filter(!(pid %in% bad_subs))
 ```
 
-```{r ref.label="rm_short_rts", eval=TNT_PRINT}
+```{r tnt remove short rts, eval=TNT_PRINT}
+short_rt_subs = find_short_rts(d, vars_of_interest)
+d <- d %>%
+  filter(!(pid %in% short_rt_subs))
 ```
 
-```{r ref.label="preproc", eval=TNT_PRINT}
+```{r tnt preproc, eval=TNT_PRINT}
+d <- d %>%
+  brt_append(brt) %>%
+  clean_grade_gender()
+
+tnt = d
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
+
 
 ```{r ref.label="score_feedback_means", eval=TNT_PRINT}
 ```
@@ -607,17 +818,24 @@ score_formula = NA
 brt_rt_var = "brt_rt_mean.dominant"
 ```
 
-```{r ref.label="df_from_proc_demo", eval=FILTER_PRINT}
+```{r filter load from proc_demo, eval=FILTER_PRINT}
+d_raw = grab_module(proc_demo, this_task)
 ```
 
-```{r ref.label="preproc", eval=FILTER_PRINT}
-```
-
-```{r filter extra preproc, eval=FILTER_PRINT}
-d <- d %>%
+```{r filter preproc, eval=FILTER_PRINT}
+d <- d_raw %>%
+  brt_append(brt) %>%
+  clean_grade_gender() %>%
   mutate(rt_mean.2 = (rt_mean.correct.2 + rt_mean.incorrect.2) / 2,
          rt_mean.4 = (rt_mean.correct.4 + rt_mean.incorrect.4) / 2)
+
+filter = d
+
+asis_output("##n by grade and gender")
+asis_output(print("\n"))
+table(d$grade_label, d$gender)
 ```
+
 
 ```{r ref.label="score_feedback_means", eval=FILTER_PRINT}
 ```
@@ -631,13 +849,13 @@ d <- d %>%
 ```{r filter lms, eval=FILTER_PRINT}
 # this one has to be special because we're also regressing by distractor number which doesn't apply for other modules
 asis_output("##regressions")
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 d %>%
   with(summary(lm(get(vars_of_interest[1]) ~ grade * gender * distractors)))
 
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 paste("###", vars_of_interest_long[2], sep = "") %>%
   asis_output() # dumb: they have to be in two separate if statements to get the heading to render
 d %>%
@@ -647,7 +865,7 @@ d %>%
 ```{r filter graphs, eval=FILTER_PRINT}
 # again special because need to plot by distractor number
 asis_output("##graphs")
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 paste("###", vars_of_interest_long[1], sep = "") %>%
   asis_output()
 
@@ -668,7 +886,7 @@ d_plot %>%
   labs(y = vars_of_interest_long[1]) +
   guides(color = guide_legend(title = "Grade"))
 
-cat("\n") %>% asis_output()
+asis_output(print("\n"))
 paste("###", vars_of_interest_long[2], sep = "") %>%
   asis_output()
 
@@ -703,3 +921,17 @@ vars_of_interest_acc_long = list(c("Mean RT--2 targets trials, correct press", "
 
 ```{r ref.label="graphs_by_acc", eval=FILTER_PRINT}
 ```
+
+```{r cfa scratch, eval = FALSE}
+cfa_model_3 = ' shift =~ switch_rt_mean.cost + tnt_rt_mean.cost
+                update =~ bspan_rt_mean.correct
+                inhibit =~ stroop_rt_mean.cost + flanker_rt_mean.cost + saat_rt_mean.correct.sustained '
+
+cfa_model_sep = ' shift =~ switch_rt_mean.cost + tnt_rt_mean.cost
+                  update =~ bspan_rt_mean.correct
+                  inhibit =~ switch_rt_mean.cost + tnt_rt_mean.cost + bspan_rt_mean.correct + stroop_rt_mean.cost + flanker_rt_mean.cost + saat_rt_mean.correct.sustained
+                  shift ~ 1 
+                  update ~ 1 
+                  inhibit ~ 1 '
+```
+
